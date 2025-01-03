@@ -165,7 +165,7 @@
                       for="authorizationContext">ConversationChannelDefinition API Name:</label>
                     <div class="slds-form-element__control">
                       <input type="text" id="authorizationContext" name="authorizationContext"
-                        placeholder="Type ConversationChannelDefinition API Name…" class="slds-input" />
+                        placeholder="Type ConversationChannelDefinition API Name…" class="slds-input" readonly/>
                     </div>
                   </div>
                   <div class="slds-form-element slds-form-element_stacked">
@@ -185,11 +185,16 @@
                     </div>
                   </div>
                   <div class="slds-form-element slds-form-element_stacked">
+                    <label class="slds-form-element__label slds-truncate" for="customPlatformEvent">Custom Platform Event API Name:</label>
+                    <div class="slds-form-element__control">
+                      <input type="text" id="customPlatformEvent" name="customPlatformEvent" placeholder="Type Custom Plaform Event Field API Name…" class="slds-input" readonly/>
+                  </div>
+                  <div class="slds-form-element slds-form-element_stacked">
                     <label class="slds-form-element__label slds-truncate" for="customEventTypeField">Event Type Custom
                       Field API Name:</label>
                     <div class="slds-form-element__control">
                       <input type="text" id="customEventTypeField" name="customEventTypeField"
-                        placeholder="Type EventType Custom Field API Name…" class="slds-input" />
+                        placeholder="Type EventType Custom Field API Name…" class="slds-input" readonly/>
                     </div>
                   </div>
                   <div class="slds-form-element slds-form-element_stacked">
@@ -197,9 +202,39 @@
                       Field API Name:</label>
                     <div class="slds-form-element__control">
                       <input type="text" id="customEventPayloadField" name="customEventPayloadField"
-                        placeholder="Type Payload Custom Field API Name…" class="slds-input" />
+                        placeholder="Type Payload Custom Field API Name…" class="slds-input" readonly/>
                     </div>
                   </div>
+                  
+                  <div id="inboundReceiptsAndTypingIndicator" style="display: none;">
+                    <!-- partner support -->
+                    <div class="slds-form-element slds-form-element_stacked">
+                        <label class="slds-form-element__label slds-truncate" for="isInboundReceiptsPartnerEnabled">Partner Supports BYO Inbound Acknowledgements:</label>
+                        <div class="slds-form-element__control">
+                        <input type="text" id="isInboundReceiptsPartnerEnabled" name="isInboundReceiptsPartnerEnabled" placeholder="Type Partner Supports BYO Inbound Acknowledgements…" class="slds-input" readonly/>
+                    </div>
+                    </div>
+                    <div class="slds-form-element slds-form-element_stacked">
+                        <label class="slds-form-element__label slds-truncate" for="isTypingIndicatorPartnerEnabled">Partner Supports BYO Typing Indicators:</label>
+                        <div class="slds-form-element__control">
+                        <input type="text" id="isTypingIndicatorPartnerEnabled" name="isTypingIndicatorPartnerEnabled" placeholder="Type Partner Supports BYO Typing Indicators…" class="slds-input" readonly/>
+                    </div>
+                    </div>
+        
+                    <!-- salesforce support -->
+                    <div class="slds-form-element slds-form-element_stacked">
+                        <label class="slds-form-element__label slds-truncate" for="isInboundReceiptsSalesforceEnabled">Salesforce Setup Supports BYO Inbound Acknowledgements:</label>
+                        <div class="slds-form-element__control">
+                        <input type="text" id="isInboundReceiptsSalesforceEnabled" name="isInboundReceiptsSalesforceEnabled" placeholder="Type Salesforce Setup Supports BYO Inbound Acknowledgements…" class="slds-input" readonly/>
+                    </div>
+                    </div>
+                    <div class="slds-form-element slds-form-element_stacked">
+                        <label class="slds-form-element__label slds-truncate" for="isTypingIndicatorSalesforceEnabled">Salesforce Setup Supports BYO Typing Indicators:</label>
+                        <div class="slds-form-element__control">
+                            <input type="text" id="isTypingIndicatorSalesforceEnabled" name="isTypingIndicatorSalesforceEnabled" placeholder="Type Salesforce Setup Supports BYO Typing Indicators…" class="slds-input" readonly/>
+                        </div>
+                    </div>
+                </div> 
                   <div class="slds-form-element slds-form-element_stacked">
                     <div class="slds-form-element__control">
                       <div class="slds-p-top_small slds-p-bottom_small">

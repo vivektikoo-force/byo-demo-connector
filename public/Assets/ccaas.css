@@ -67,3 +67,77 @@
 .slds-accordion__content .slds-text-longform li {
   margin-bottom: 0.5rem;
 }
+
+/* Container for the ChoicesMessage Buttons */
+.custom-choices-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.5rem;
+}
+
+/* Style for individual ChoicesMessage buttons */
+.custom-choice-button {
+  display: block;
+  width: 100%;
+  max-width: 300px; 
+  padding: 0.5rem 0.5rem; 
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #333333; 
+  background-color: #f8f9fa; 
+  border: 1px solid #ccc; 
+  border-radius: 1rem; 
+  cursor: pointer;
+  text-align: center;
+  margin: 0 auto;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); 
+}
+
+.custom-choice-button:hover {
+  background-color: #e2e6ea; 
+}
+
+.custom-choice-button:disabled {
+  background-color: #f0f0f0;
+  color: #888;
+  border: 1px solid #ccc;
+  cursor: not-allowed;
+}
+
+.custom-button_selected {
+  background-color: #007bff;
+  color: #ffffff; 
+  border: 1px solid #007bff;
+}
+
+div.conversation-link-message__panel {
+  display: inline-block;
+  width: 15rem;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  white-space: pre-line;
+  word-wrap: break-word;
+  text-align: center;
+  /* Style Hook Value: #f3f3f3, Delta-E (ΔE) Value: 0.61 */
+  background-color: var(--slds-g-color-neutral-base-95, #f2f2f3);
+  max-width: 50vw;
+  border: 1px solid var(--slds-g-color-neutral-base-95, #f3f2f2);
+}
+
+div.conversation-link-message__panel_outbound {
+  border-radius: 0.5rem 0.5rem 0;
+  color: var(--slds-g-color-neutral-base-100, #ffffff);
+  margin-left: auto;
+  min-height: 2rem;
+}
+
+:dir(rtl) div.conversation-link-message__panel_outbound {
+  border-radius: 0.5rem 0.5rem 0.5rem 0;
+}
+
+div.conversation-link-message__content {
+  padding: 1rem;
+  text-align: left;
+}

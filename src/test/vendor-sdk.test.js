@@ -25,8 +25,8 @@ describe('Vendor Sdk tests', () => {
     const telephonyConnector = connector.getTelephonyConnector();
     const vendorSdk = connector.sdk;
     const dummyPhoneNumber = 'dummyPhonenumber';
-    const dummyCallAttributes = { participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER };
-    
+    const globalDummyCallInfo = { isMuted : false , isOnHold : false};
+
     beforeAll(async () => {
         global.fetch = jest.fn(() =>
             Promise.resolve({
@@ -66,6 +66,11 @@ describe('Vendor Sdk tests', () => {
                 hasAgentAvailability: true,
                 hasQueueWaitTime: true,
                 debugEnabled: true,
+                isDialPadDisabled: false,
+                isPhoneBookDisabled: false,
+                isHidSupported: false,
+                hasSetExternalMicrophoneDeviceSetting: true,
+                hasSetExternalSpeakerDeviceSetting: true
             };
             vendorSdk.state.agentId = 'agentId';                
             vendorSdk.state.contactCenterAdditionalSettings = contactCenterAdditionalSettings;
@@ -76,32 +81,69 @@ describe('Vendor Sdk tests', () => {
         beforeEach(() => {
             jest.spyOn(vendorSdk, 'connectParticipant').mockImplementation((args) => args);
             jest.spyOn(vendorSdk, 'publishCallBargedInEventToAgents').mockImplementation((args) => args);
+            jest.spyOn(vendorSdk, 'processMute').mockImplementation((args) => args);
+            jest.spyOn(vendorSdk, 'processBroadcastMute').mockImplementation((args) => args);
             jest.spyOn(vendorSdk, 'log').mockImplementation((args) => args);
             jest.spyOn(vendorSdk.eventEmitter, 'emit').mockImplementation((args) => args);
         });
         afterEach(() => {
             jest.restoreAllMocks();
+            vendorSdk.state.isMultipartyAllowed = false;
         })
         it('Should handle CALL_STARTED message', () => {
             const message = { 
                 messageType: constants.USER_MESSAGE.CALL_STARTED,
                 data: { phoneNumber: "phoneNumber",
                         callId: "callId",
-                        voiceCallId: "voiceCallId"
-                 }
+                        voiceCallId: "voiceCallId",
+                        callInfo: {
+                            renderContactId: "id"
+                        }
+                 },
+                 fromUsername: "id"
              };
              vendorSdk.handleSocketMessage(message);
              const call = new PhoneCall({
-                   callType: "inbound",
+                   callType: "transfer",
                    phoneNumber: "phoneNumber",
                    callId: "callId",
-                   callInfo: new CallInfo({isOnHold:false}),
-                   callAttributes: new PhoneCallAttributes({participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER, voiceCallId : "voiceCallId" })
+                   callInfo: new CallInfo({isOnHold:false, renderContactId: "id"}),
+                   callAttributes: new PhoneCallAttributes({participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER, voiceCallId : "voiceCallId" }),
              });
              let callResult = new CallResult({call});
              expect(Object.keys(vendorSdk.state.activeCalls).length).toEqual(1);
              expect(vendorSdk.state.activeCalls).toEqual({"callId" : call});
+            //  expect(vendorSdk.state.activeCalls).toBeNull();
              expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.CALL_STARTED, payload: callResult});
+        });
+
+        it('[Multi-Party] Should handle CALL_STARTED message', () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+
+            const call = new PhoneCall({
+                callType: "transfer",
+                phoneNumber: "phoneNumber",
+                callId: "callId",
+                callInfo: new CallInfo({isOnHold:false}),
+                callAttributes: new PhoneCallAttributes({participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER, voiceCallId : "voiceCallId" }),
+                contact: new Contact({id:"id"})
+            });
+            vendorSdk.updateCallInfoObj( { "data" : { "callInfo" : call.callInfo}});
+            call.callInfo.renderContact = new Contact({id:"id"});
+            const message = {
+                messageType: constants.USER_MESSAGE.CALL_STARTED,
+                data: { phoneNumber: "phoneNumber",
+                    callId: "callId",
+                    voiceCallId: "voiceCallId",
+                    callInfo: call.callInfo,
+                    activeConferenceCalls: [],
+                }
+            };
+            vendorSdk.handleSocketMessage(message);
+            let callResult = new CallResult({call});
+            expect(Object.keys(vendorSdk.state.activeCalls).length).toEqual(1);
+            expect(vendorSdk.state.activeCalls).toEqual({"callId" : call});
+            expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.CALL_STARTED, payload: callResult});
         });
 
         it('Should handle INTERNAL_CALL_STARTED message', () => {
@@ -111,14 +153,17 @@ describe('Vendor Sdk tests', () => {
                     contact: {
                         phoneNumber: "phoneNumber",
                         type: Constants.CONTACT_TYPE.AGENT
+                    },
+                    renderContact: {
+                        name: "name"
                     }
                  }
              };
              vendorSdk.handleSocketMessage(message);
              const call = new PhoneCall({
-                   callType: "internalcall",
+                   callType: "InternalCall",
                    phoneNumber: "phoneNumber",
-                   callInfo: new CallInfo({isOnHold:false}),
+                   callInfo: new CallInfo({isOnHold:false, renderContactId: "name"}),
                    contact: new Contact({phoneNumber : "phoneNumber", type: Constants.CONTACT_TYPE.AGENT}),
                    callAttributes: new PhoneCallAttributes({participantType: Constants.PARTICIPANT_TYPE.AGENT })
              });
@@ -159,6 +204,53 @@ describe('Vendor Sdk tests', () => {
                 }
              };
             vendorSdk.handleSocketMessage(message);
+        });
+
+        it('Should handle MUTE message', () => {
+            const message = { 
+                messageType: constants.USER_MESSAGE.MUTE,
+                data: {
+                    callId : "dummyCallInfo"
+                },
+                fromUsername: "dummyUsername"
+             };
+            vendorSdk.handleSocketMessage(message);
+            expect(vendorSdk.state.agentId).not.toEqual(message.fromUsername);
+            expect(vendorSdk.processBroadcastMute).toBeCalled();
+        });
+
+        it('Should handle UNMUTE message', () => {
+            const message = { 
+                messageType: constants.USER_MESSAGE.UNMUTE,
+                data: {
+                    callId : "dummyCallInfo"
+                },
+                fromUsername: "dummyUsername"
+             };
+            vendorSdk.handleSocketMessage(message);
+            expect(vendorSdk.processBroadcastMute).toBeCalled();
+        });
+
+        it('Should not process MUTE if agentId matches fromUsername', () => {
+            const message = { 
+                messageType: constants.USER_MESSAGE.MUTE,
+                data: { callId: "dummyCallInfo" },
+                fromUsername: "agentId"  // Assuming this is the same as vendorSdk.state.agentId
+            };
+            vendorSdk.state.agentId = "agentId";
+            vendorSdk.handleSocketMessage(message);
+            expect(vendorSdk.processBroadcastMute).not.toBeCalled();
+        });
+        
+        it('Should not process UNMUTE if agentId matches fromUsername', () => {
+            const message = { 
+                messageType: constants.USER_MESSAGE.UNMUTE,
+                data: { callId: "dummyCallInfo" },
+                fromUsername: "agentId"  // Assuming this is the same as vendorSdk.state.agentId
+            };
+            vendorSdk.state.agentId = "agentId";
+            vendorSdk.handleSocketMessage(message);
+            expect(vendorSdk.processBroadcastMute).not.toBeCalled();
         });
 
         it('log message that cannot be handled', () => {
@@ -228,26 +320,26 @@ describe('Vendor Sdk tests', () => {
             expect(result.showLogin).toBeFalsy();
         });
 
-        it('should handle is-ott true', async () => {
+        it('should handle is-local-config true', async () => {
             // Mock the fetchServer function to resolve with true or false
-            fetchServerMock.mockResolvedValue(true); // Mocking is-ott check true
-            const result = await connector.init(constants.CALL_CENTER_CONFIG);
+            fetchServerMock.mockResolvedValue(true); // Mocking is-local-config check true
+            const result = await connector.init({...constants.CALL_CENTER_CONFIG, messagingChannel: {"id":"abc"}});
             // Assert fetchServer function was called with correct parameter
-            expect(fetchServerMock).toHaveBeenCalledWith("is-ott", 'GET');
+            expect(fetchServerMock).toHaveBeenCalledWith("/is-local-config", 'GET');
             expect(global.fetch).toHaveBeenCalledTimes(1);
             expect(global.fetch).toHaveBeenCalledWith('/api/configureTenantInfo', expect.any(Object));
             expect(vendorSdk.readCallCenterConfigAndSetState).toBeCalledTimes(0);
             expect(result).toBeDefined();
         });
     
-        it('should handle is-ott false', async () => {
+        it('should handle is-local-config false', async () => {
             // Mock the fetchServer function to resolve with true or false
-            fetchServerMock.mockResolvedValue(false); // Mocking is-ott check false
+            fetchServerMock.mockResolvedValue(false); // Mocking is-local-config check false
             fetchCCCMock.mockResolvedValue({});
             // Call init function
-            await connector.init(constants.CALL_CENTER_CONFIG);
+            await connector.init({...constants.CALL_CENTER_CONFIG, messagingChannel: {"id":"abc"}});
             // Assert fetchServer function was called with correct parameter
-            expect(fetchServerMock).toHaveBeenCalledWith("is-ott", 'GET');
+            expect(fetchServerMock).toHaveBeenCalledWith("/is-local-config", 'GET');
             expect(fetchCCCMock).toBeCalledTimes(1);
         });
         it('should handle exception in readCallCenterConfigAndSetState', async () => {
@@ -256,10 +348,10 @@ describe('Vendor Sdk tests', () => {
                 throw new Error('Simulated error');
             });
     
-            await expect(connector.init(constants.CALL_CENTER_CONFIG))
+            await expect(connector.init({...constants.CALL_CENTER_CONFIG, messagingChannel: {"id":"abc"}}))
                 .rejects.toBe("Failed to configure tenant information");
     
-            expect(fetchServerMock).toHaveBeenCalledWith("is-ott", 'GET');
+            expect(fetchServerMock).toHaveBeenCalledWith("/is-local-config", 'GET');
         });
     });
     describe('readCallCenterConfigAndSetState', () => {
@@ -326,7 +418,7 @@ describe('Vendor Sdk tests', () => {
 
         it('should call the correct endpoint with the correct data', async () => {
             await vendorSdk.fetchContactCenterConfigToEnv();
-            expect(fetchMock).toHaveBeenCalledWith("http://localhost:3030/setcallcenterconfig", {
+            expect(fetchMock).toHaveBeenCalledWith("/api/fetchServer", {
                 method: 'POST',
                 headers: {
                 'Content-Type': 'application/json'
@@ -341,7 +433,9 @@ describe('Vendor Sdk tests', () => {
                 routingOwner: 'routingOwner',
                 instanceUrl: 'instanceUrl',
                 scrtUrl: 'scrtUrl',
-                orgId: 'orgId'
+                orgId: 'orgId',
+                method: 'POST',
+                endpoint: '/setcallcenterconfig'
                 })
             });
         });
@@ -387,11 +481,15 @@ describe('Vendor Sdk tests', () => {
             const result = await vendorSdk.fetchServer('test-endpoint', 'GET');
     
             // Assert the fetch function was called with the correct parameters
-            expect(fetchMock).toHaveBeenCalledWith('http://localhost:3030/test-endpoint', {
-                method: 'GET',
+            expect(fetchMock).toHaveBeenCalledWith('/api/fetchServer', {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
+                body: JSON.stringify({
+                    method:"GET", 
+                    endpoint:"test-endpoint"
+                }),
             });
     
             // Assert the result is as expected
@@ -416,11 +514,15 @@ describe('Vendor Sdk tests', () => {
             const result = await vendorSdk.fetchServer('test-endpoint', 'POST');
     
             // Assert the fetch function was called with the correct parameters
-            expect(fetchMock).toHaveBeenCalledWith('http://localhost:3030/test-endpoint', {
+            expect(fetchMock).toHaveBeenCalledWith('/api/fetchServer', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
+                body: JSON.stringify({
+                    method:"POST", 
+                    endpoint:"test-endpoint"
+                })
             });
     
             // Assert the result is as expected
@@ -437,7 +539,7 @@ describe('Vendor Sdk tests', () => {
         });
         
         it('Should return a valid active calls result on getActiveCalls', async () => {
-            const callResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const callResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const result = await telephonyConnector.getActiveCalls();
             expect(Object.keys(result.activeCalls).length).toEqual(1);
             Object.values(result.activeCalls).forEach(call => {
@@ -462,9 +564,16 @@ describe('Vendor Sdk tests', () => {
             }
         });
 
+        it('Should return a valid call result on acceptCall when object is not a call instance ', async () => {
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            const { call } = startCallResult;
+
+            vendorSdk.addCall({...call});
+            expect(Object.values(vendorSdk.state.activeCalls).length).toBe(1);
+        });
         
         it('Should return a valid call result on acceptCall', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
 
             const result = await telephonyConnector.acceptCall(call);
@@ -480,6 +589,17 @@ describe('Vendor Sdk tests', () => {
             expect(result.call.state).toBe(Constants.CALL_STATE.RINGING);
         });
 
+        it('Should return a replay activeConferenceCalls if available ', async () => {
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            vendorSdk.state.activeConferenceCalls = Object.values(vendorSdk.state.activeCalls);
+
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            const { call } = startCallResult;
+            const result = await telephonyConnector.acceptCall(call);
+            expect(result.call).toBe(call);
+            expect(publishEvent).toBeCalledTimes(2);
+        });
+
         it('Should return a rejected promise if throwError is set', async () => {
             vendorSdk.throwError(true);
             connector.sdk.requestCallback({ phoneNumber: '100' });
@@ -488,6 +608,7 @@ describe('Vendor Sdk tests', () => {
             });
             await expect(telephonyConnector.acceptCall(phoneCall)).rejects.toStrictEqual('demo error');
         });
+
         afterAll(() => {
             vendorSdk.throwError(false);
         });
@@ -503,7 +624,7 @@ describe('Vendor Sdk tests', () => {
 
     describe('declineCall', () => {
         it('Should return a valid call result on declineCall', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
 
             const result = await telephonyConnector.declineCall(call);
@@ -511,7 +632,7 @@ describe('Vendor Sdk tests', () => {
         });
 
         it('Should return a valid call result on declineCall', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
 
             const result = await telephonyConnector.declineCall();
@@ -520,12 +641,66 @@ describe('Vendor Sdk tests', () => {
     });
 
     describe('endCall', () => {
+        afterEach(() => {
+            vendorSdk.state.isMultipartyAllowed = false;
+        });
+
         it('Should return a valid call result on endCall', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
 
             const result = await telephonyConnector.endCall(call);
             expect(result.calls.pop()).toBe(call);
+        });
+
+        it('[Multi-party] Should return a valid call result on endCall by others', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            let call;
+            //to make sure its an endcall by the user itself clicking on small end call button
+            const startCallResult2 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            ({call} = startCallResult2);
+            vendorSdk.state.agentId = call.contact.id;
+            const result2  = await telephonyConnector.endCall(call);
+            expect(result2.calls.pop()).toBe(call);
+
+            //to make sure its a endcall by another user
+            vendorSdk.state.agentId = 'agentId';
+            const startCallResult3 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            ({call} = startCallResult3);
+            const result3  = await telephonyConnector.endCall(call);
+            expect(result3.calls.pop()).toBe(call);
+
+            //end call of intial caller
+            vendorSdk.state.agentId = 'agentId';
+            const startCallResult4 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            ({call} = startCallResult4);
+            delete call.callId;
+            const result4 = await vendorSdk.destroyCalls(call);
+            expect(result4.pop()).toBe(call);
+        });
+
+        it('[Multi-party] Should return a valid call result on endCall by own user', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+
+            //to make sure its an endcall by the user itself clicking on main end call button
+            const contact = new Contact({ id: 'dummyUser', phoneNumber: '100', type: Constants.CONTACT_TYPE.PHONENUMBER});
+            const startCallResult = await telephonyConnector.dial(contact);
+            const {call} = startCallResult;
+            vendorSdk.state.agentId = call.contact.id;
+            const result  = await telephonyConnector.endCall({callAttributes : { participantType : constants.PARTICIPANT_TYPE.INITIAL_CALLER }});
+            expect(result.calls.pop()).toBe(call);
+        });
+
+        it('[Multi-party] Should end call from demo connector', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+
+            const contact = new Contact({ id: 'dummyUser', phoneNumber: '100', type: Constants.CONTACT_TYPE.PHONENUMBER});
+            const startCallResult = await telephonyConnector.dial(contact);
+            const {call} = startCallResult;
+            vendorSdk.state.agentId = call.contact.id;
+
+            connector.sdk.initiateHangupMultiParty("ended", null);
+            expect(Object.values(vendorSdk.state.activeCalls).length).toEqual(0);
         });
 
         it('Should return a valid call result for end call on an internal call', async () => {
@@ -550,8 +725,38 @@ describe('Vendor Sdk tests', () => {
             }
         });
 
+        it('[Multi-party] Should not return a valid call for internal call that is destroyed by processcall by someone else', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            const contact = new Contact({ id: 'dummyUser', phoneNumber: '100', type: Constants.CONTACT_TYPE.PHONENUMBER});
+            const startCallResult = await telephonyConnector.dial(contact);
+            const { call } = startCallResult;
+            expect(startCallResult.call.callType).toBe(Constants.CALL_TYPE.OUTBOUND.toLowerCase());
+            startCallResult.call.callAttributes.participantType = Constants.PARTICIPANT_TYPE.AGENT;
+            vendorSdk.processCallDestroyed({callId :call.callId});
+            try {
+                telephonyConnector.endCall(call);
+            } catch(e) {
+                expect(e.message).toEqual("Couldn't find an active call");
+            }
+            expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.PARTICIPANT_REMOVED, payload: { call : call }});
+        });
+
+        it('[Multi-party] Should not return a valid call for internal call that is destroyed by processcall by owner', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            const contact = new Contact({ id: 'dummyUser', phoneNumber: '100', type: Constants.CONTACT_TYPE.AGENT});
+            const startCallResult = await telephonyConnector.dial(contact);
+            const { call } = startCallResult;
+            expect(startCallResult.call.callType).toBe(Constants.CALL_TYPE.INTERNAL_CALL.toLowerCase());
+            vendorSdk.processCallDestroyed({callId :call.callId});
+            try {
+                telephonyConnector.endCall(call);
+            } catch(e) {
+                expect(e.message).toEqual("Couldn't find an active call");
+            }
+        });
+
         it('Should return a valid call result on endCall for Agent for Initial Caller & Third party', async () => {
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             await vendorSdk.startInboundCall(dummyPhoneNumber, { participantType: constants.PARTICIPANT_TYPE.THIRD_PARTY });
             const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, { participantType: constants.PARTICIPANT_TYPE.AGENT });
             const { call } = startCallResult;
@@ -560,7 +765,7 @@ describe('Vendor Sdk tests', () => {
         });
 
         it('Should return a valid call result on endCall for Agent for just Initial caller', async () => {
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, { participantType: constants.PARTICIPANT_TYPE.AGENT });
             const { call } = startCallResult;
             try {
@@ -583,7 +788,7 @@ describe('Vendor Sdk tests', () => {
 
         it('Should publish wrap-up started', async () => {
             jest.useFakeTimers();
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             await telephonyConnector.endCall(call);
             jest.runAllTimers();
@@ -591,7 +796,7 @@ describe('Vendor Sdk tests', () => {
         });
 
         it('Should return a rejected promise if throwError is set', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             vendorSdk.throwError(true);
             const { call } = startCallResult;
             await expect(telephonyConnector.endCall(call)).rejects.toStrictEqual('demo error');
@@ -720,6 +925,11 @@ describe('Vendor Sdk tests', () => {
             expect(result.hasMerge).toEqual(vendorSdk.state.capabilities.hasMerge);
             expect(result.hasRecord).toEqual(vendorSdk.state.capabilities.hasRecord);
             expect(result.hasSwap).toEqual(vendorSdk.state.capabilities.hasSwap);
+            expect(result.isDialPadDisabled).toEqual(vendorSdk.state.capabilities.isDialPadDisabled);
+            expect(result.isPhoneBookDisabled).toEqual(vendorSdk.state.capabilities.isPhoneBookDisabled);
+            expect(result.isHidSupported).toEqual(vendorSdk.state.capabilities.isHidSupported);
+            expect(result.hasSetExternalMicrophoneDeviceSetting).toEqual(vendorSdk.state.capabilities.hasSetExternalMicrophoneDeviceSetting);
+            expect(result.hasSetExternalSpeakerDeviceSetting).toEqual(vendorSdk.state.capabilities.hasSetExternalSpeakerDeviceSetting);
         });
     });
 
@@ -740,12 +950,22 @@ describe('Vendor Sdk tests', () => {
                 hasMute: false,
                 hasMerge: false,
                 hasRecord: false,
-                hasSwap: false
+                hasSwap: false,
+                isDialPadDisabled: true,
+                isPhoneBookDisabled: true,
+                isHidSupported: true,
+                hasSetExternalMicrophoneDeviceSetting: true,
+                hasSetExternalSpeakerDeviceSetting: true
             });
             expect(vendorSdk.state.capabilities.hasMute).toEqual(false);
             expect(vendorSdk.state.capabilities.hasMerge).toEqual(false);
             expect(vendorSdk.state.capabilities.hasRecord).toEqual(false);
             expect(vendorSdk.state.capabilities.hasSwap).toEqual(false);
+            expect(vendorSdk.state.capabilities.isDialPadDisabled).toEqual(true);
+            expect(vendorSdk.state.capabilities.isPhoneBookDisabled).toEqual(true);
+            expect(vendorSdk.state.capabilities.isHidSupported).toEqual(true);
+            expect(vendorSdk.state.capabilities.hasSetExternalMicrophoneDeviceSetting).toEqual(true);
+            expect(vendorSdk.state.capabilities.hasSetExternalSpeakerDeviceSetting).toEqual(true);
         });
 
         it('setCapabilities from simulator', async () => {
@@ -773,24 +993,71 @@ describe('Vendor Sdk tests', () => {
     });
 
     describe('mute', () => {
-        it('Should return a valid mute toggle result on mute', async () => {
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
-            const result = await telephonyConnector.mute();
+        it('Should return a valid mute toggle result on global mute', async () => {
+            const call = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            call.isGlobal = true;
+            const result = await telephonyConnector.mute(call);
             expect(result.isMuted).toBeTruthy();
+            expect(result.isGlobal).toBeTruthy();
+            expect(result.call.callAttributes.target).toEqual(vendorSdk.state.agentId);
+            expect(result.call).toEqual({...call.call, callAttributes: {...call.call.callAttributes, target: vendorSdk.state.agentId}});
+        });
+    });
+
+    describe('processBroadcastMute', () => {
+        beforeEach(() => {
+            jest.spyOn(vendorSdk, 'getCall').mockImplementation((args) => args);
+            jest.spyOn(vendorSdk, 'updateCallInfo').mockImplementation((args) => args);
+            jest.spyOn(vendorSdk, 'getPrimaryCall').mockImplementation(() => {return {contact: {id: "dummyUser"}}});
+        });
+        afterEach(() => {
+            jest.restoreAllMocks();
+        })
+        it('Should return a valid mute toggle result on processBroadcastMute', async () => {
+            const call = new PhoneCall({ 
+                callId: "dummyCallInfo", 
+                callAttributes: { target: "dummyUser", participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER }, 
+                contact: new Contact({ id: vendorSdk.state.agentId }),
+                callInfo: new CallInfo({ isMuted: false }),
+                isGlobal: false
+                });
+            vendorSdk.addCall(call);
+            await vendorSdk.processBroadcastMute(call, true);
+            expect(vendorSdk.getCall).toBeCalledWith({callInfo: { renderContactId: "dummyUser" }});
+            expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.MUTE_TOGGLE, payload: { isMuted: true, call: {isMuted: true}, isGlobal: false }});
         });
     });
 
     describe('unmute', () => {
         it('Should return a valid mute toggle result on unmute', async () => {
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
-            const result = await telephonyConnector.unmute();
+            const call = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            call.isGlobal = true;
+            const result = await telephonyConnector.unmute(call);
             expect(result.isMuted).toBeFalsy();
+            expect(result.isGlobal).toBeTruthy();
+            const result2 = await telephonyConnector.mute(call);
+            expect(result2.isMuted).toBeTruthy();
+        });
+    });
+
+    describe('processBroadcastMute', () => {
+        it('Should return a valid unmute toggle result on unmute', async () => {
+            const call = new PhoneCall({ 
+                callId: "dummyCallInfo", 
+                callAttributes: { target: "dummyUser", participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER }, 
+                contact: new Contact({ id: vendorSdk.state.agentId }),
+                callInfo: new CallInfo({ isMuted: true }),
+                isGlobal: false
+                });
+            vendorSdk.addCall(call);
+            await vendorSdk.processBroadcastMute(call, false);
+            expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.MUTE_TOGGLE, payload: { isMuted: false, call: call, isGlobal: false }});
         });
     });
 
     describe('hold', () => {
         it('Should return a valid hold toggle result on hold', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
 
             const result = await telephonyConnector.hold(call);
@@ -806,7 +1073,7 @@ describe('Vendor Sdk tests', () => {
 
     describe('resume', () => {
         it('Should return a valid hold toggle result on resume', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
 
             const result = await telephonyConnector.resume(call);
@@ -818,7 +1085,7 @@ describe('Vendor Sdk tests', () => {
 
     describe('pauseRecording', () => {
         it('Should return a valid recording toggle result on pauseRecording', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
 
             const result = await telephonyConnector.pauseRecording(call);
@@ -828,7 +1095,7 @@ describe('Vendor Sdk tests', () => {
 
     describe('resumeRecording', () => {
         it('Should return a valid recording toggle result on resumeRecording', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
 
             const result = await telephonyConnector.resumeRecording(call);
@@ -838,18 +1105,17 @@ describe('Vendor Sdk tests', () => {
 
     describe('swap', () => {
         it('Should return a valid hold toggle result on swap', async () => {
-            const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const call1 = startCallResult1.call;
             const startCallResult2 = await vendorSdk.startInboundCall(dummyPhoneNumber, { participantType: constants.PARTICIPANT_TYPE.THIRD_PARTY });
             const call2 = startCallResult2.call;
-
             const result = await telephonyConnector.swap(call1, call2);
-            expect(result.isThirdPartyOnHold).toBe(false);
-            expect(result.isCustomerOnHold).toBe(false);
+            expect(result.isThirdPartyOnHold).toBe(true);
+            expect(result.isCustomerOnHold).toBe(true);
             expect(result.calls).toEqual(vendorSdk.state.activeCalls);
         });
         it('Should not error on swap when call2 is invalid', async () => {
-            const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const call1 = startCallResult1.call;
             const invalidParticipant = "invalid";
             const startCallResult2 = await vendorSdk.startInboundCall(dummyPhoneNumber, { participantType: invalidParticipant });
@@ -864,7 +1130,7 @@ describe('Vendor Sdk tests', () => {
 
     describe('conference', () => {
         it('Should return a valid conference result on conference', async () => {
-            const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const call1 = startCallResult1.call;
             const startCallResult2 = await vendorSdk.startInboundCall(dummyPhoneNumber, { participantType: constants.PARTICIPANT_TYPE.THIRD_PARTY });
             const call2 = startCallResult2.call;
@@ -877,39 +1143,81 @@ describe('Vendor Sdk tests', () => {
     });
 
     describe('addParticipant', () => {
+        var vendorWrapUp = vendorSdk.beginWrapup;
         beforeEach(() => {
             vendorSdk.state.onlineUsers = ['dummyUser'];
             vendorSdk.state.userFullNames = new Map();
             vendorSdk.messageUser = jest.fn();
+            vendorSdk.beginWrapup = jest.fn();
         });
 
-        it('Should return a participant result on addParticipant', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+        afterEach(() => {
+            vendorSdk.beginWrapup = vendorWrapUp;
+            vendorSdk.state.isMultipartyAllowed = false;
+        });
+
+        it('Should return a participant result with parent call info on addParticipant', async () => {
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, {...globalDummyCallInfo, 
+                conferenceEnabled: false, showMergeButton: false});
+            const { call } = startCallResult;
+            const contact = new Contact({ id: 'dummyUser', phoneNumber: dummyPhoneNumber });
+            const result = await telephonyConnector.addParticipant(contact, call);
+            const callInfo = new CallInfo({ holdEnabled: true, 
+                isExternalTransfer: true, 
+                removeParticipantVariant: Constants.REMOVE_PARTICIPANT_VARIANT.ALWAYS })
+            expect(result.phoneNumber).toEqual(dummyPhoneNumber);
+            expect(result.initialCallHasEnded).toBeFalsy();
+            expect(result.callInfo.isOnHold).toEqual(false);
+            expect(result.callInfo.conferenceEnabled).toEqual(false);
+            expect(result.callInfo.showMergeButton).toEqual(false);
+            expect(result.callInfo.holdEnabled).toEqual(callInfo.holdEnabled);
+            expect(result.callInfo.isExternalTransfer).toEqual(callInfo.isExternalTransfer);
+            expect(result.callInfo.removeParticipantVariant).toEqual(callInfo.removeParticipantVariant);
+            expect(result.callInfo.callStateTimestamp).toBeInstanceOf(Date);
+            expect(result.callId).not.toBeNull();
+            expect(vendorSdk.messageUser).toBeCalledWith(contact.id, constants.USER_MESSAGE.CALL_STARTED, expect.anything());
+        });
+
+        it('[Multi-party] Should return a participant result on addParticipant', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            const callInfo = new CallInfo({
+                holdEnabled: true,
+                isExternalTransfer: true,
+                removeParticipantVariant: Constants.REMOVE_PARTICIPANT_VARIANT.ALWAYS });
+            vendorSdk.updateCallInfoObj( { "data" : { "callInfo" : callInfo}});
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            startCallResult.call.callAttributes = {isAutoMergeOn: true};
             const { call } = startCallResult;
             const contact = new Contact({ id: 'dummyUser', phoneNumber: dummyPhoneNumber });
             const result = await telephonyConnector.addParticipant(contact, call);
             expect(result.phoneNumber).toEqual(dummyPhoneNumber);
             expect(result.initialCallHasEnded).toBeFalsy();
-
-            expect(result.callInfo).toEqual(new CallInfo({ isOnHold: false,
-                                                           holdEnabled: false, 
-                                                           isExternalTransfer: true, 
-                                                           removeParticipantVariant: Constants.REMOVE_PARTICIPANT_VARIANT.NEVER }));
+            expect(result.callInfo.isOnHold).toEqual(false);
+            expect(result.callInfo.holdEnabled).toEqual(callInfo.holdEnabled);
+            expect(result.callInfo.isExternalTransfer).toEqual(callInfo.isExternalTransfer);
+            expect(result.callInfo.removeParticipantVariant).toEqual(callInfo.removeParticipantVariant);
             expect(result.callId).not.toBeNull();
             expect(vendorSdk.messageUser).toBeCalledWith(contact.id, constants.USER_MESSAGE.CALL_STARTED, expect.anything());
+            const primaryCall = vendorSdk.getCall(startCallResult.call);
+            expect(primaryCall.callInfo.isOnHold).toEqual(false);
         });
         
         it('Should set the isExternalTransfer flag correctly when addParticipant is called', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             const contact = new Contact({ id: 'dummyUser', phoneNumber: dummyPhoneNumber });
             call.callInfo.isExternalTransfer = false;
             let result = await telephonyConnector.addParticipant(contact, call);
-            expect(result.callInfo).toEqual(new CallInfo({ isOnHold: false, holdEnabled: false, isExternalTransfer: false, removeParticipantVariant: Constants.REMOVE_PARTICIPANT_VARIANT.NEVER }));
+            const callInfo = new CallInfo({ holdEnabled: true, isExternalTransfer: false, removeParticipantVariant: Constants.REMOVE_PARTICIPANT_VARIANT.ALWAYS });
+            expect(result.callInfo.isOnHold).toEqual(false);
+            expect(result.callInfo.holdEnabled).toEqual(callInfo.holdEnabled);
+            expect(result.callInfo.isExternalTransfer).toEqual(callInfo.isExternalTransfer);
+            expect(result.callInfo.removeParticipantVariant).toEqual(callInfo.removeParticipantVariant);
+            expect(result.callInfo.callStateTimestamp).toBeInstanceOf(Date);
         });
         
         it('Should throw error on adParticipant if there is already an active call', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             const contact = new Contact({ phoneNumber: dummyPhoneNumber });
             await telephonyConnector.addParticipant(contact, call);
@@ -920,24 +1228,29 @@ describe('Vendor Sdk tests', () => {
             }
         });
         it('Should return a participant result on addParticipant with blind transfer', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             const contact = new Contact({ id: 'dummyUser', phoneNumber: dummyPhoneNumber });
             const result = await telephonyConnector.addParticipant(contact, call, true);
-            
+            const callInfo = new CallInfo({ isExternalTransfer: true,
+                holdEnabled: true, 
+                removeParticipantVariant: Constants.REMOVE_PARTICIPANT_VARIANT.ALWAYS });
+
             expect(result.phoneNumber).toEqual(dummyPhoneNumber);
             expect(result.initialCallHasEnded).toBeTruthy();
-            expect(result.callInfo).toEqual(new CallInfo({ isOnHold: false, 
-                                                           isExternalTransfer: true,
-                                                           holdEnabled: false, 
-                                                           removeParticipantVariant: Constants.REMOVE_PARTICIPANT_VARIANT.NEVER }));
+            expect(result.callInfo.isOnHold).toEqual(false);
+            expect(result.callInfo.isExternalTransfer).toEqual(callInfo.isExternalTransfer);
+            expect(result.callInfo.holdEnabled).toEqual(callInfo.holdEnabled);
+            expect(result.callInfo.removeParticipantVariant).toEqual(callInfo.removeParticipantVariant);
+            expect(result.callInfo.callStateTimestamp).toBeInstanceOf(Date);
             expect(result.callId).not.toBeNull();
-            expect(vendorSdk.messageUser).toBeCalledWith(contact.id, constants.USER_MESSAGE.CALL_STARTED, expect.anything());
+            expect(vendorSdk.beginWrapup).toBeCalled();
         });
         it('Should use the parent call\'s additionalFields string ', async () => {
             const additionalFields = "{\"SourceType\":\"Service\"}";
-            const dummyCallInfo = {additionalFields: additionalFields, ...dummyCallAttributes};
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallInfo);
+            const dummyCallInfo = {additionalFields: additionalFields, ...globalDummyCallInfo};
+            const dummyFlowConfig = {dialedNumber: "1234567890", flowName:"SCV_OMNI_FLOW", voiceCallId:"voiceCallId", fallbackQueue: "fallbackQueue"};
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallInfo, dummyFlowConfig);
             const { call } = startCallResult;
             const contact = new Contact({ id: 'dummyUser', phoneNumber: dummyPhoneNumber });
             const result = await telephonyConnector.addParticipant(contact, call, false);
@@ -956,16 +1269,16 @@ describe('Vendor Sdk tests', () => {
                     });
                 }
             });
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             const contact = new Contact({ id: 'flowId', type: "Flow" });
             const result = await telephonyConnector.addParticipant(contact, call);
             expect(result.initialCallHasEnded).toBeFalsy();
-
-            expect(result.callInfo).toEqual(new CallInfo({ isOnHold: false,
-                isExternalTransfer: false,
-                holdEnabled: false,
-                removeParticipantVariant: Constants.REMOVE_PARTICIPANT_VARIANT.NEVER }));
+            expect(result.callInfo.isOnHold).toEqual(false);
+            expect(result.callInfo.isExternalTransfer).toEqual(false);
+            expect(result.callInfo.holdEnabled).toEqual(true);
+            expect(result.callInfo.removeParticipantVariant).toEqual(Constants.REMOVE_PARTICIPANT_VARIANT.ALWAYS);
+            expect(result.callInfo.callStateTimestamp).toBeInstanceOf(Date);
             expect(result.callId).not.toBeNull();
             expect(vendorSdk.messageUser).toBeCalledWith("dummyUser", constants.USER_MESSAGE.CALL_STARTED, expect.anything());
         });
@@ -994,19 +1307,18 @@ describe('Vendor Sdk tests', () => {
 
     describe('connectParticipant', () => {
         it('Should publish a participant result on connectParticipant', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             const contact = new Contact({ phoneNumber: dummyPhoneNumber });
+            call.contact = contact;
             await telephonyConnector.addParticipant(contact, call);
-            connector.sdk.connectParticipant({removeParticipantVariant : Constants.REMOVE_PARTICIPANT_VARIANT.ALWAYS });
+            connector.sdk.connectParticipant(call.callInfo, "inbound", call);
             expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.PARTICIPANT_CONNECTED, payload: new ParticipantResult({
+                contact,
                 phoneNumber: dummyPhoneNumber,
-                callInfo: new CallInfo({ isOnHold: false,
-                   holdEnabled: false, 
-                   isExternalTransfer: true, 
-                   removeParticipantVariant: Constants.REMOVE_PARTICIPANT_VARIANT.NEVER }),
+                callInfo: new CallInfo(call.callInfo),
                 initialCallHasEnded: false,
-                callId: expect.anything()
+                callId: expect.anything(),
             })});
         });
 
@@ -1022,7 +1334,7 @@ describe('Vendor Sdk tests', () => {
 
     describe('removeParticipant', () => {
         it('Should publish a participant removed result on removeParticipant', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             const contact = new Contact({ phoneNumber: dummyPhoneNumber });
             await telephonyConnector.addParticipant(contact, call);
@@ -1032,16 +1344,25 @@ describe('Vendor Sdk tests', () => {
 
         it('Should publish wrap-up started', async () => {
             jest.useFakeTimers();
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             connector.sdk.removeParticipant(Constants.PARTICIPANT_TYPE.INITIAL_CALLER);
             jest.runAllTimers();
             expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.AFTER_CALL_WORK_STARTED, payload: { callId: call.callId }});
         });
 
+        it('[Multi-party] Should publish wrap-up started', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            const { call } = startCallResult;
+            connector.sdk.removeParticipant(Constants.PARTICIPANT_TYPE.INITIAL_CALLER);
+            expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.PARTICIPANT_REMOVED, payload: { call : call }});
+            vendorSdk.state.isMultipartyAllowed = false;
+        });
+
         it('should not publish wrap-up started when call is on-going', async () => {
             jest.useFakeTimers();
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             const contact = new Contact({ phoneNumber: dummyPhoneNumber });
             await telephonyConnector.addParticipant(contact, call);
@@ -1053,7 +1374,7 @@ describe('Vendor Sdk tests', () => {
 
     describe('hangup', () => {
         it('Should publish a call result on hangUp', async () => {
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             connector.sdk.hangup();
             expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.HANGUP, payload: new HangupResult({ calls: [call] })});
@@ -1064,15 +1385,16 @@ describe('Vendor Sdk tests', () => {
             const initialCall = startCallResult.call;
             const contact = new Contact({ phoneNumber: dummyPhoneNumber });
             const thirdPartyCallResult = await connector.sdk.addParticipant(contact, initialCall);
-            const thirdPartyCall = connector.sdk.getCall(thirdPartyCallResult);
-            const hangupCalls = [initialCall, thirdPartyCall];
+            const activeCallsResult = await connector.sdk.getActiveCalls();
+            expect(Object.keys(activeCallsResult.activeCalls).length).toEqual(2);
+            thirdPartyCallResult.callId = activeCallsResult.activeCalls[0].callId;
             connector.sdk.hangup();
-            expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.HANGUP, payload: new HangupResult({ calls: hangupCalls })});
+            expect(publishEvent).toBeCalledTimes(2);
         });
 
         it('Should publish wrap-up started', async () => {
             jest.useFakeTimers();
-            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             connector.sdk.hangup();
             jest.runAllTimers();
@@ -1093,21 +1415,21 @@ describe('Vendor Sdk tests', () => {
         });
 
         it('hangup should call beginWrap-up', async () => {
-            const startCallResult = await sdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await sdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             testConnector.sdk.hangup();
             expect(sdk.beginWrapup).toBeCalledWith(call);
         });
 
         it('endcall should call beginWrap-up', async () => {
-            const startCallResult = await sdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await sdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             testConnector.sdk.endCall(call);
             expect(sdk.beginWrapup).toBeCalledWith(call);
         });
 
         it('removeParticipant should call beginWrap-up', async () => {
-            const startCallResult = await sdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const startCallResult = await sdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const { call } = startCallResult;
             await testConnector.sdk.removeParticipant(Constants.PARTICIPANT_TYPE.INITIAL_CALLER);
             expect(sdk.beginWrapup).toBeCalledWith(call);
@@ -1297,7 +1619,7 @@ describe('Vendor Sdk tests', () => {
             id: 'onlineUser1',
             type: Constants.CONTACT_TYPE.AGENT,
             name : 'onlineUser1',
-            phoneNumber: "5445554440",
+            phoneNumber: "onlineUser1",
             availability: "AVAILABLE"
         });
 
@@ -1527,12 +1849,12 @@ describe('Vendor Sdk tests', () => {
     describe('deskphone errors when action not supported', () => {
         it('Mute should throw error', async () => {
             vendorSdk.state.capabilities.hasMute = false;
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             await expect(connector.sdk.mute()).rejects.toStrictEqual(new Error("Mute is not supported"));
         });
         it('Unmute should throw error', async () => {
             vendorSdk.state.capabilities.hasMute = false;
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             await expect(connector.sdk.unmute()).rejects.toStrictEqual(new Error("Mute is not supported"));
         });
         it('conference should throw error', async () => {
@@ -1545,12 +1867,12 @@ describe('Vendor Sdk tests', () => {
         });
         it('pauseRecording should throw error', async () => {
             vendorSdk.state.capabilities.hasRecord = false;
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             await expect(connector.sdk.pauseRecording()).rejects.toStrictEqual(new Error("Recording is not supported"));
         });
         it('resumeRecording should throw error', async () => {
             vendorSdk.state.capabilities.hasRecord = false;
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             await expect(connector.sdk.resumeRecording()).rejects.toStrictEqual(new Error("Recording is not supported"));
         });
     });
@@ -1565,7 +1887,7 @@ describe('Vendor Sdk tests', () => {
         });
 
         it('Should error when callId is not in activeCalls', async () => {
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             try {
                 vendorSdk.getCall({ callId: 123 });
             } catch(e) {
@@ -1574,22 +1896,52 @@ describe('Vendor Sdk tests', () => {
         });
 
         it('Should error when call is unknown', async () => {
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             try {
                 vendorSdk.getCall({ callType: 'unknown' });
             } catch(e) {
-                expect(e.message).toEqual("Call is not valid. It must have callAttributes and/or callId.");
+                expect(e.message).toEqual("Call is not defined or invalid.");
             }
         });
 
         it('Should return call when callId is known', async () => {
-            const result = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const result = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             expect(vendorSdk.getCall({ callId: result.call.callId })).toEqual(result.call);
         });
 
         it('Should return call when type is HANGUP', async () => {
-            const result = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const result = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             expect(vendorSdk.getCall({ callId: result.call.callId })).toEqual(result.call);
+        });
+        it('Should return call with contact Id', async () => {
+            const result = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            expect(vendorSdk.getCall({ contact: { id:result.call.contact.id}})).toEqual(result.call);
+        });
+        it('Should return null with non-existing contact Id', async () => {
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            expect(vendorSdk.getCall({ contact: { id:"random" }})).toEqual(null);
+        });
+        it('Should return call with receiver contact Id', async () => {
+            const renderContactId = "renderContactId";
+            const callInfo = new CallInfo({renderContactId: renderContactId})
+            const result = new PhoneCall({callInfo});
+            vendorSdk.state.activeCalls = { result };
+            expect(vendorSdk.getCall({ callInfo: {renderContactId: renderContactId}})).toEqual(result);
+        });
+        it('Should return call with non-existing receiver contact Id', async () => {
+            const renderContactId = "renderContactId";
+            const callInfo = new CallInfo({renderContactId: renderContactId})
+            const result = new PhoneCall({callInfo});
+            vendorSdk.state.activeCalls = { result };
+            expect(vendorSdk.getCall({ callInfo: {renderContactId: "random"}})).toEqual(null);
+        });
+    });
+
+    describe('getPrimaryCall', () => {
+        it('Should return the primary call', async () => {
+            const primaryCall = new PhoneCall({ callAttributes: { participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER }});
+            vendorSdk.addCall(primaryCall);
+            expect(vendorSdk.getPrimaryCall()).toEqual(primaryCall);
         });
     });
 
@@ -1603,7 +1955,7 @@ describe('Vendor Sdk tests', () => {
         });
 
         it('Should publish CALL_STARTED on succesfull call creation', async () => {
-            const callResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const callResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.CALL_STARTED, payload: callResult });
         });
 
@@ -1611,7 +1963,7 @@ describe('Vendor Sdk tests', () => {
             expect.hasAssertions();
             vendorSdk.state.agentAvailable = false;
             const errorMessage = `Agent is not available for a inbound call from phoneNumber - ${dummyPhoneNumber}`;
-            vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes).catch((error) => {
+            vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo).catch((error) => {
                 expect(error.message).toEqual(errorMessage);
             });
         });
@@ -1621,7 +1973,7 @@ describe('Vendor Sdk tests', () => {
             global.fetch = jest.fn(() => 
                 Promise.reject(error)
             );
-            await expect(vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes)).rejects.toBe(error);
+            await expect(vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo)).rejects.toBe(error);
         });
         it('Should still publish CALL_STARTED when createVoiceCall API is not available', async () => {
             global.fetch = jest.fn(() => 
@@ -1629,9 +1981,34 @@ describe('Vendor Sdk tests', () => {
                     json: () => Promise.resolve({ success : false })
                 })
             );
-            const callResult = await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            const callResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.CALL_STARTED, payload: callResult });
         });
+        
+        it('Should publish not CALL_STARTED on UnifiedRouting enabled flow', async () => {
+            global.fetch = jest.fn((resource) => {
+                if (resource.includes("executeOmniFlow")) {
+                    return Promise.resolve({
+                        json: () => Promise.resolve({agent: "dummyUser"})
+                    });
+                } else {
+                    return Promise.resolve({
+                        json: () => Promise.resolve({voiceCallId: "someId"})
+                    });
+                }
+            });
+            const dummyFlowConfig = {dialedNumber: "1234567890", flowName:"SCV_OMNI_FLOW", voiceCallId:"voiceCallId", fallbackQueue: "fallbackQueue", isUnifiedRoutingEnabled:true};
+            const callResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo, dummyFlowConfig);
+            console.log('#$# CallResult = ' + callResult);
+        });
+
+        it('returns an error when executeOmniFlow fails', async () => {
+            const dummyFlowConfig = {dialedNumber: "1234567890", flowName:"SCV_OMNI_FLOW", voiceCallId:"voiceCallId", fallbackQueue: "fallbackQueue", isUnifiedRoutingEnabled:true};
+            let fetchMock = jest.fn();
+            global.fetch = fetchMock;
+            fetchMock.mockRejectedValue(new Error('Omni flow execution failed'));
+            await expect(vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo, dummyFlowConfig)).rejects.toThrow('Omni flow execution failed');
+          });
     });
 
     describe('requestCallback', () => {
@@ -1667,7 +2044,7 @@ describe('Vendor Sdk tests', () => {
 
         });
         it('superviseCall should fail if there is an active call', async () => {
-            await vendorSdk.startInboundCall(dummyPhoneNumber, dummyCallAttributes);
+            await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             telephonyConnector.superviseCall(call).catch((error) => {
                 expect(error.message).toEqual('Agent is not available to supervise a call');
             });
