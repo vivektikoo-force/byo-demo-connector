@@ -2,11 +2,19 @@ import messagingConstants from "../common/messagingConstants";
 import { testDescriptionMapping, testDescriptions, knowledgeArticles } from '../common/healthCheckConstants.js';
 const axios = require('axios');
 const SERVER_URL = "http://localhost:3030";
+const READ_ACK_TITLE = "ReadAcknowledgement";
+const DELIVERY_ACK_TITLE = "DeliveryAcknowledgement";
 let chatList;
 let output;
 let sfSubject = "Agent";
 let endUserClientName = "End User Client";
 let typingStartedReady = true;
+let outboundTypingStarted = false;
+var orgMode;
+var lastReadAckEntry;
+var lastDeliveredAckEntry;
+var convEntryNumber = 0;
+var convEntryIds;
 
 window.addEventListener("load", () => {
 
@@ -21,6 +29,10 @@ window.addEventListener("load", () => {
       "channelAddressIdentifier": document.getElementById("channelAddressIdentifier").value,
       "endUserClientIdentifier": document.getElementById("endUserClientIdentifier").value,
       "customEventPayloadField": document.getElementById("customEventPayloadField").value,
+      "isInboundReceiptsPartnerEnabled": document.getElementById("isInboundReceiptsPartnerEnabled").value,
+      "isTypingIndicatorPartnerEnabled": document.getElementById("isTypingIndicatorPartnerEnabled").value,
+      "isInboundReceiptsSalesforceEnabled": document.getElementById("isInboundReceiptsSalesforceEnabled").value,
+      "isTypingIndicatorSalesforceEnabled": document.getElementById("isTypingIndicatorSalesforceEnabled").value,
       "routingOwner": getRoutingOwner(),
       "consentOwner": document.getElementById("consentOwner") ? document.getElementById("consentOwner").value : null,
       "customEventTypeField": document.getElementById("customEventTypeField").value,
@@ -71,6 +83,7 @@ window.addEventListener("load", () => {
       formData.append("interactionType", "EntryInteraction");
       formData.append("entryType", "Message");
     }
+    formData.append("messageType", "StaticContentMessage");
 
     // submit the request to middleware server
     axios({
@@ -200,7 +213,11 @@ window.addEventListener("load", () => {
               formData.routingType = document.getElementById("routingTypeForAgentWork").value;
               formData.routingCorrelationId = document.getElementById("routingCorrelationIdCW").value;
               break;
+            default:
+              break;
           }
+          
+          appendAgentActionVisibilities(formData);
           break;
         default:
           throw Error('Not a valid API selected');
@@ -306,6 +323,8 @@ window.addEventListener("load", () => {
   const routingInfoDropDown = document.getElementById("routingInfo");
   const interactionRequestDropDown = document.getElementById("interactionRequest");
   const capacityPercentageContainer = document.getElementById("capacityPercentageContainer");
+  const transferAction = document.getElementById("transferAction");
+  const transferActionVisibility = document.getElementById("transferActionVisibility");
   const capacityWeightContainer = document.getElementById("capacityWeightContainer");
 
   if (interactionRequestDropDown) {
@@ -328,6 +347,11 @@ window.addEventListener("load", () => {
     });
   }
 
+  if (transferAction && transferActionVisibility) {
+    transferAction.addEventListener("change", (event) => {
+      transferActionVisibility.disabled = !event.target.checked;
+    });
+  }
 
   if (routingInfoDropDown) {
     routingInfoDropDown.addEventListener("change", (event) => {
@@ -422,22 +446,81 @@ window.addEventListener("load", () => {
     }
   });
 
-
-
   // Register custom event to retrieve the replied message from an agent in core app
   const evtSource = new EventSource(SERVER_URL + "/replyMessage");
   evtSource.addEventListener("replymsg", (e) => {
-    console.log('\n=============== EventSource - replymsg event:', e.data);
-    let replyObj = JSON.parse(e.data);
-    if (replyObj.type === messagingConstants.EVENT_TYPE.INTERACTION) {
-      appendInboundMessageToChatList(replyObj.replyMessageText, replyObj.attachmentName, replyObj.attachmentUrl, replyObj.payloadField);
-    } else if (replyObj.type === messagingConstants.EVENT_TYPE.ROUTING_REQUESTED) {
-      appendInboundEventToChatList(replyObj.type, replyObj.payloadField);
+    if (!orgMode) {
+      axios({
+        method: "get",
+        url: SERVER_URL + "/getOrgMode"
+      }).then((res) => {
+        if (res && res.data && res.data.orgMode) {
+          orgMode = res.data.orgMode;
+          registerEvents(e);
+        }
+      });
+    } else {
+      registerEvents(e);
     }
   });
 
   if(document.getElementById('healthCheckButton')) {
     document.getElementById('healthCheckButton').addEventListener('click', runHealthCheck);
+  }
+
+  function appendAgentActionVisibilities(formData) {
+    let agentActionVisibilities = [];
+    if (document.getElementById("transferAction").checked) {
+      agentActionVisibilities.push({
+        "agentAction": "Transfer",
+        "visible": document.getElementById("transferActionVisibility").value === 'true'
+      });
+    }
+    formData.agentActionVisibilities = JSON.stringify(agentActionVisibilities);
+  }
+
+  function registerEvents(event) {
+    if (orgMode !== 'VOICE_ONLY') {
+      console.log('\n=============== EventSource - replymsg event:', event.data);
+      let replyObj = JSON.parse(event.data);
+      if (replyObj.type === messagingConstants.EVENT_TYPE.INTERACTION) {
+        //check if event is typing indicator
+        let payload = JSON.parse(replyObj.payloadField.string);
+        let eventType = payload.payload.entryType;
+
+        switch(eventType) {
+          case 'TypingStartedIndicator':
+            outboundTypingStarted = true;
+            generateTypingIndicator(outboundTypingStarted);
+            return;
+          case 'TypingStoppedIndicator':
+            outboundTypingStarted = false;
+            generateTypingIndicator(outboundTypingStarted);
+            return;
+          case READ_ACK_TITLE:
+          case DELIVERY_ACK_TITLE:
+            handleAckEvent(JSON.parse(event.data));
+            return;
+        }
+
+        switch(replyObj.messageType) {
+          case 'ChoicesMessage':
+            appendChoicesMessageToChatList(replyObj,replyObj.payloadField.string);
+            break;
+          case 'FormMessage':
+            appendFormMessageToChatList(replyObj);
+            break;
+          case 'StaticContentMessage':
+            appendInboundMessageToChatList(replyObj.replyMessageText, replyObj.attachmentName, replyObj.attachmentUrl, replyObj.payloadField,
+            replyObj.previewImageUrl, replyObj);
+            break;
+          default:
+            console.log('Unsupported message type:', replyObj.messageType);
+        }
+      } else if (replyObj.type === messagingConstants.EVENT_TYPE.ROUTING_REQUESTED) {
+        appendInboundEventToChatList(replyObj.type, replyObj.payloadField);
+      }
+    }
   }
 
   function getTestDescription(testName) {
@@ -571,12 +654,25 @@ function initializeAccordion() {
   });
 }
 
-  // get settings from middleware server
+if (!orgMode) {
+  axios({
+    method: "get",
+    url: SERVER_URL + "/getOrgMode"
+  }).then((res) => {
+    if (res && res.data && res.data.orgMode) {
+      orgMode = res.data.orgMode;
+    }
+    getSettingsForApp();
+  });
+} else {
+  getSettingsForApp();
+}
+
+function getSettingsForApp() {
   axios({
     method: "get",
     url: SERVER_URL + "/getsettings"
-  })
-    .then((res) => {
+  }).then((res) => {
       if (res.status === 200) {
         // set settings fields with values retrieved from middleware server
         let settings = res.data;
@@ -601,19 +697,25 @@ function initializeAccordion() {
         }
         endUserClientName = settings.endUserClientIdentifier;
 
-        return axios({
-          method: "get",
-          url: SERVER_URL + "/getConversationChannelDefinitions",
-        });
+        // Ensuring the demo connector runs gracefully even if the .env is not present
+        if (!settings.authorizationContext) {
+          return null;
+        } else {
+          return axios({
+            method: "get",
+            url: SERVER_URL + "/getConversationChannelDefinitions",
+          });
+        }
       }
-    })
-    .then((ccdResponse) => {
+    }).then((ccdResponse) => {
       if (ccdResponse && ccdResponse.status && ccdResponse.status === 200) {
         let ccdData = ccdResponse.data;
 
         if (ccdData && ccdData.records && ccdData.records.length > 0) {
           const ccdDataRecord = ccdData.records[0];
           document.getElementById("authorizationContext").value = ccdDataRecord.DeveloperName;
+          document.getElementById("isInboundReceiptsPartnerEnabled").value = ccdDataRecord.IsInboundReceiptsEnabled;
+          document.getElementById("isTypingIndicatorPartnerEnabled").value = !ccdDataRecord.IsTypingIndicatorDisabled;
           if (document.getElementById("customPlatformEvent")) {
             document.getElementById("customPlatformEvent").value = ccdDataRecord.CustomPlatformEvent;
           }
@@ -625,6 +727,39 @@ function initializeAccordion() {
           if (document.getElementById("consentOwner")) {
             document.getElementById("consentOwner").value = ccdDataRecord.ConsentOwner;
           }
+
+          axios({
+            method: "get",
+            url: SERVER_URL + "/getApiVersion"
+          }).then((res) => {
+            const apiVersion = res.data;
+            if (ccdDataRecord.Id && apiVersion && apiVersion >= 63.0) {
+              axios({
+                method: "post",
+                url: SERVER_URL + "/getCustomMsgChannels",
+                data: {'ccdId': ccdDataRecord.Id}
+              }).then((cmcRes) => {
+                let hasCmcRecord = false;
+                if (cmcRes && cmcRes.status && cmcRes.status === 200) {
+                  let cmcData = cmcRes.data;
+                  if (cmcData && cmcData.records && cmcData.records.length > 0) {
+                    hasCmcRecord = true;
+                    const cmcDataRecord = cmcData.records[0];
+                    document.getElementById("isInboundReceiptsSalesforceEnabled").value = cmcDataRecord.HasInboundReceipts;
+                    document.getElementById("isTypingIndicatorSalesforceEnabled").value = cmcDataRecord.HasTypingIndicator;
+                  }
+  
+                  // default values
+                  if (!hasCmcRecord) {
+                    document.getElementById("isInboundReceiptsSalesforceEnabled").value = false;
+                    document.getElementById("isTypingIndicatorSalesforceEnabled").value = true;
+                  }
+  
+                  document.getElementById("inboundReceiptsAndTypingIndicator").style.display = 'block';
+                }
+              });
+            }
+          });
         } else {
           console.log("No records found in the CCD data");
         }
@@ -635,9 +770,10 @@ function initializeAccordion() {
     .catch((err) => {
         throw err;
     });
-
-    chatList = document.getElementById('chatList');
+  }
 });
+
+chatList = document.getElementById('chatList');
 
 function appendOutboundMessageToChatList(message, originalFileName, fileName) {
   if (originalFileName && fileName) {
@@ -647,6 +783,40 @@ function appendOutboundMessageToChatList(message, originalFileName, fileName) {
   let outboundMessageHTMLElem = generateOutboundMessageHTMLElem(message);
 
   appendMessageToChatList(outboundMessageHTMLElem);
+}
+
+function generateTypingIndicator(show) {
+  var typingIndicatorElement = document.getElementById('typingIndicator');
+  if (show) {
+    if (!typingIndicatorElement) {
+      let htmlElement = htmlToElem('<div class="slds-chat-message__body" id="typingIndicator">' +
+        '<div class="slds-chat-message__text slds-chat-message__text_inbound">' +
+             '<span class="slds-icon-typing slds-is-animated slds-list_horizontal" title="Agent typing">' +
+                '<span class="slds-icon-typing__dot"></span>' +
+                '<span class="slds-icon-typing__dot"></span>' +
+                '<span class="slds-icon-typing__dot"></span>' +
+                '<span class="slds-assistive-text">Agent is typing</span>' +
+             '</span>' +
+        '</div>' +
+        '<div class="slds-chat-message__meta">' +
+            '<span>Agent</span>' +
+        '</div>' +
+      '</div>');
+      chatList.appendChild(htmlElement);
+      chatList.scrollTop = chatList.scrollHeight;
+    }
+  } else {
+    if (typingIndicatorElement)
+        chatList.removeChild(typingIndicatorElement);
+  }
+}
+
+function reloadTypingIndicator() {
+  var typingIndicatorElement = document.getElementById('typingIndicator');
+  if (typingIndicatorElement) {
+    chatList.removeChild(typingIndicatorElement);
+  }
+  generateTypingIndicator(outboundTypingStarted);
 }
 
 function generateOutboundMessageHTMLElem(message) {
@@ -660,12 +830,94 @@ function generateOutboundMessageHTMLElem(message) {
     '        <span>' + message +
     '        </span>' +
     '      </div>' +
-    '      <div class="slds-chat-message__meta" aria-label="said ' + endUserClientName + ' at ' + dateTime + '">' + endUserClientName + ' • ' + dateTime + '</div>' +
-    '    </div>' +
+    '      <div class="slds-chat-message__meta" aria-label="said ' + endUserClientName + ' at ' + dateTime + '">' + endUserClientName + ' • ' + dateTime +
+    '      <div class="slds-float_right" id="read_ack_' + convEntryNumber + '" style="display: none">' + 
+    '        <span class="slds-icon_container slds-p-left_large slds-icon-utility-check slds-p-right_xx-small" title="Delivered">' +
+    '                <svg class="slds-icon slds-icon_xx-small" aria-hidden="true">' +
+    '                      <use xlink:href="/slds/icons/utility/success.svg"></use>' +
+    '                </svg>' +
+    '        </span>' +
+    '        <span><i>Read</i></span>' +
+    '      </div>' +
+    '      <div class="slds-float_right" id="delivered_ack_' + convEntryNumber + '" style="display: none">' + 
+    '        <span class="slds-icon_container slds-p-left_large slds-icon-utility-check slds-p-right_xx-small" title="Delivered">' +
+    '                <svg class="slds-icon slds-icon_xx-small" aria-hidden="true">' +
+    '                      <use xlink:href="/slds/icons/utility/success.svg"></use>' +
+    '                </svg>' +
+    '        </span>' +
+    '        <span><i>Delivered</i></span>' +
+    '      </div>' +
+    '      </div>' +
+    '    </div>'   +
     '  </div>' +
     '</li>';
 
+  convEntryNumber++;
   return htmlToElem(html);
+}
+
+async function handleAckEvent(data) {
+  // submit the request to middleware server
+  await axios({
+    method: "get",
+    url: SERVER_URL + "/convEntryIds"
+  }).then((res) => {
+    convEntryIds = res.data;
+    console.log('---------- convEntryIds array: ' + convEntryIds + ' -----------------');
+
+    if (convEntryIds) {
+      const ackMsgObj = JSON.parse(data.payloadField.string).payload.entryPayload;
+      const ackMsg = ackMsgObj.acknowledgedConversationEntryIdentifier;
+      const ackMsgId = convEntryIds.find(id => id === ackMsg);
+    
+      if (ackMsgId && ackMsgObj.entryType === READ_ACK_TITLE) {
+        lastReadAckEntry = setBadgeToLastEntry(ackMsgId, lastReadAckEntry, READ_ACK_TITLE);
+      } else if (ackMsgId && ackMsgObj.entryType === DELIVERY_ACK_TITLE) {
+        // Prioritize "read" over "delivery" badge
+        // has this msg been acked as "Read"?
+        if (getReadBadgeStatus(ackMsgId)) {
+          lastDeliveredAckEntry = ackMsgId;
+          return;
+        }
+    
+        lastDeliveredAckEntry = setBadgeToLastEntry(ackMsgId, lastDeliveredAckEntry, DELIVERY_ACK_TITLE);
+      }
+    }
+  }).catch((err) => {
+      throw err;
+  });
+}
+
+function setBadgeToLastEntry(convEntryId, lastAckEventEntry, entryType) {
+  if (lastAckEventEntry) {
+    setBadge(lastAckEventEntry, entryType, false);
+  }
+
+  return setBadge(convEntryId, entryType, true);
+}
+
+function setBadge(ackMsgId, entryType, showBadge) {
+  const idx = convEntryIds.indexOf(ackMsgId);
+  let val = showBadge ? 'block' : 'none';
+  if (entryType === READ_ACK_TITLE) {
+    console.log('------- mark idx ', idx, ' outbound msg as READ');
+    document.getElementById("read_ack_" + idx).style.display = val;
+    // make sure to hide 'Delivered' badge when mark the same entry as 'Read'
+    if (val === 'block') {
+      document.getElementById("delivered_ack_" + idx).style.display = 'none';
+    }
+  } else if (entryType === DELIVERY_ACK_TITLE) {
+    console.log('------- mark idx ', idx, ' outbound msg as DELIVERED');
+    document.getElementById("delivered_ack_" + idx).style.display = val;
+  } 
+
+  return ackMsgId;
+}
+
+function getReadBadgeStatus(convEntryId) {
+  const idx = convEntryIds.indexOf(convEntryId);
+  const val =  document.getElementById("read_ack_" + idx).style.display;
+  return val === 'block' ? true : false;
 }
 
 function createAndAppendNotificationHTMLElem(element) {
@@ -795,14 +1047,118 @@ function generateAttachmentForOutboundMessageHTMLElem(fileName, fileUrl) {
   return htmlToElem(html);
 }
 
-function appendInboundMessageToChatList(message, attachmentName, attachmentUrl, payloadField) {
+// Updated function for handling ChoicesMessages
+function appendChoicesMessageToChatList(choicesMessage, payloadString) {
+  const payloadId = JSON.parse(payloadString).payload.entryPayload.id;
+
+  let buttonsElement = generateCustomChoicesHTMLElem(choicesMessage, payloadId);
+  appendMessageToChatList(buttonsElement);
+
+  // Update event log
+  document.getElementById("eventLog").value = JSON.stringify(JSON.parse(payloadString), undefined, 4);
+}
+
+// Custom function to generate HTML for ChoicesMessage 
+function generateCustomChoicesHTMLElem(choicesMessage, payloadId) {
+  let now = new Date();
+  let dateTime = now.toLocaleString();
+  
+  let html = `
+    <li class="slds-chat-listitem slds-chat-listitem_inbound">
+      <div class="slds-chat-message">
+        <div class="slds-chat-message__body">
+          <div class="slds-chat-message__text slds-chat-message__text_inbound">
+              <span>  ${replaceURLsWithHyperLinks(choicesMessage.choiceText)}
+              </span>
+          </div>
+          <div class="choices-message" id="choices-${Date.now()}" data-payload-id="${payloadId}">
+            <div class="custom-choices-grid">
+              ${choicesMessage.optionItems.map(item => `
+                <button class="custom-choice-button" 
+                        data-identifier="${item.optionIdentifier}"
+                        data-title="${item.titleItem.title}">
+                  ${item.titleItem.title}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="slds-chat-message__meta" aria-label="said ${sfSubject} at ${dateTime}"> ${sfSubject} •  ${dateTime} </div>
+        </div>
+      </div>
+    </li>
+  `;
+
+  return htmlToElem(html);
+}
+
+function handleButtonClick(event) {
+  const button = event.target;
+  const identifier = button.getAttribute('data-identifier');
+  const title = button.getAttribute('data-title');
+  
+  console.log('Button clicked:', title, 'with identifier:', identifier);
+  
+  // Disable all buttons in this choice group
+  const choicesContainer = button.closest('.choices-message');
+  const allButtons = choicesContainer.querySelectorAll('.custom-choice-button'); 
+  const payloadId = choicesContainer.getAttribute('data-payload-id');
+  console.log('payloadId:', payloadId);
+  
+  allButtons.forEach(btn => {
+    btn.disabled = true;
+    btn.classList.add('slds-button_disabled');
+  });
+
+  // Highlight the selected button
+  button.classList.remove('slds-button_outline-brand');
+  button.classList.add('custom-button_selected');
+
+  let messageContent = `Selected option: ${title}`;
+  
+  // Create a FormData object
+  let formData = new FormData();
+  formData.append('message', messageContent);
+  formData.append('interactionType', 'EntryInteraction');
+  formData.append('entryType', 'Message');
+  formData.append('optionIdentifier', identifier);
+  formData.append("messageType", "ChoicesResponseMessage");
+  formData.append("inReplyToMessageId", payloadId);
+  
+  // Send the message to the server
+  axios({
+    method: "post",
+    url: SERVER_URL + "/sendmessage",
+    data: formData
+  })
+    .then((res) => {
+      if (res.status === 200) {
+        console.log(res);
+        appendOutboundMessageToChatList(messageContent);
+      }
+    })
+    .catch((err) => {
+      console.error('Error sending message:', err);
+    });
+}
+
+document.getElementById('chatList').addEventListener('click', function(event) {
+  if (event.target.classList.contains('custom-choice-button') && !event.target.disabled) {
+    handleButtonClick(event);
+  }
+});
+
+
+function appendInboundMessageToChatList(message, attachmentName, attachmentUrl, payloadField,
+    previewImageUrl, inputPayload) {
   if (attachmentName && attachmentUrl) {
     appendAttachmentInboundMessageToChatList(attachmentName, attachmentUrl);
   }
+  else if (previewImageUrl && inputPayload.url) {
+    appendLinkPreviewToChatList(previewImageUrl, inputPayload.url, inputPayload.title);
+  }
+  if (!message && !attachmentName && !attachmentUrl && !inputPayload.url) return;
 
-  if (!message && !attachmentName && !attachmentUrl) return;
-
-  let inboundMessageHTMLElem = generateInboundMessageHTMLElem(message, attachmentName, attachmentUrl);
+  let inboundMessageHTMLElem = generateInboundMessageHTMLElem(message);
 
   if (message) {
     appendMessageToChatList(inboundMessageHTMLElem);
@@ -876,6 +1232,45 @@ function generateAttachmentForInboundMessageHTMLElem(fileName, fileUrl) {
   return htmlToElem(html);
 }
 
+function generateLinkPreviewForInboundMessageHTMLElem(previewImageUrl, url, title) {
+  let now = new Date();
+  let dateTime = now.toLocaleString();
+  let html =
+      '<li class="slds-chat-listitem slds-chat-listitem_inbound">' +
+      '  <div class="slds-chat-message">' +
+      '    <div class="slds-chat-message__body">' +
+      '      <div class="slds-chat-message__text slds-chat-message__text_inbound">' +
+      '           <a href="'+url+'"'+
+      '               target="_blank" rel="noopener noreferrer" title={linkTitle}>'+
+      '               <div className="chat-link-message__panel chat-link-message__panel_outbound">'+
+      '                   <div>'+
+      '                       <img'+
+      '                           src="'+previewImageUrl+'"/>'+
+      '                   </div>'+
+      '                   <div'+
+      '                   className="slds-chat-message__meta chat-link-message__content chat-link-message__content_outbound">'+
+      '                   <span>'+title+'</span>'+
+      '                   </br>'+
+      '                   <span>'+url+'</span>'+
+      '                   </div>'+
+      '               </div>'+
+      '           </a>'+
+      '      </div>' +
+      '      <div class="slds-chat-message__meta" aria-label="said ' + sfSubject + ' at ' + dateTime + '">' + sfSubject + ' • ' + dateTime + '</div>' +
+      '   </div>' +
+      '  </div>' +
+      '</li>';
+
+  return htmlToElem(html);
+}
+
+function appendLinkPreviewToChatList(previewImageUrl, url, title) {
+  let linkPreviewInboundMessageHTMLElem = generateLinkPreviewForInboundMessageHTMLElem(
+      previewImageUrl, url, title);
+
+  appendMessageToChatList(linkPreviewInboundMessageHTMLElem);
+}
+
 function htmlToElem(html) {
   let temp = document.createElement('template');
   html = html.trim();
@@ -886,13 +1281,17 @@ function htmlToElem(html) {
 function appendMessageToChatList(htmlElem) {
   chatList.appendChild(htmlElem);
   chatList.scrollTop = chatList.scrollHeight;
+  reloadTypingIndicator();
   beep();
 }
 
 function replaceURLsWithHyperLinks(message) {
-  if (!message) return;
+  if (!message) {
+    return;
+  }
 
-  return message.replace(/((((https?|ftps?|file):\/\/)|(www\.))[^\s]+)/g, function (url) {
+  return message.replace(/((((https?|ftps?|file):\/\/)|(www\.))[^\s]+)/g,
+      function (url) {
     var hyperlink = url;
     if (!hyperlink.match('^https?:\/\/')) {//eslint-disable-line
       hyperlink = 'http://' + hyperlink;

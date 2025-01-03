@@ -36,6 +36,8 @@ const getAxiosClient = (info) => {
 
 let vendorCallKey = '';
 let voiceCallId = '';
+let onlineUserIds = {};
+let parentChildCallId = {};
 
 const getToken = () => {
     const privateKey = fs.readFileSync(path.resolve() + '/src/server/private.key');
@@ -49,6 +51,11 @@ const getToken = () => {
 };
 
 export const ScrtConnector = {
+
+    setOnlineUserIds(userEmail, user) {
+        onlineUserIds[userEmail] = user;
+    },
+
     configureTenantInfo(params) {
         tenantInfo.scrtBaseUrl = params.scrtBaseUrl;
         tenantInfo.orgId = params.orgId;
@@ -85,6 +92,7 @@ export const ScrtConnector = {
         };
         if(params.parentCallId) {
             fieldValues.parentVoiceCallId = params.parentCallId;
+            parentChildCallId[vendorCallKey.toString()] = params.parentCallId;
         }
         if(params.callOrigin) {
             fieldValues.callOrigin = params.callOrigin;
@@ -117,15 +125,23 @@ export const ScrtConnector = {
             }
         };
         let participantId = '';
-        vendorCallKey = params.vendorCallKey ? params.vendorCallKey : vendorCallKey;
+        let vendorCallKeyApi = params.vendorCallKey ? params.vendorCallKey : vendorCallKey;
 
         switch(params.senderType) {
             case 'END_USER':
-                participantId = params.phoneNumber;
+                participantId = this.getParentVendorKey(vendorCallKeyApi) + "END_USER";
+                break;
+            case 'HUMAN_AGENT':
+                participantId = onlineUserIds[params.metaData].userId;
+                vendorCallKeyApi = this.getParentVendorKey(vendorCallKeyApi);
                 break;
             case 'VIRTUAL_AGENT':
             case 'SUPERVISOR':
-                participantId = vendorCallKey;
+                participantId = this.getParentVendorKey(vendorCallKeyApi)
+                break;
+            case 'EXTERNAL_USER':
+                participantId = params.metaData;
+                vendorCallKeyApi = this.getParentVendorKey(vendorCallKeyApi);
                 break;
         }
         const fieldValues = {
@@ -137,11 +153,18 @@ export const ScrtConnector = {
             participantId
         };
         console.log("Field Values for creating transcripts : " + JSON.stringify(fieldValues));
-        return vendorCallKey && participantId ?
-            getAxiosClient(tenantInfo).post(`/voiceCalls/${vendorCallKey}/messages`, fieldValues, headers).then((response) => {
+        return vendorCallKeyApi && participantId ?
+            getAxiosClient(tenantInfo).post(`/voiceCalls/${vendorCallKeyApi}/messages`, fieldValues, headers).then((response) => {
                 console.log("Transcription added : " + JSON.stringify(response.data));
                 return response;
             }) : Promise.reject('No active call');
+    },
+
+    getParentVendorKey(callId) {
+        if (parentChildCallId[callId]) {
+            return this.getParentVendorKey(parentChildCallId[callId]);
+        }
+        return callId;
     },
 
     sendRealtimeConversationEvents(params) {

@@ -15,6 +15,7 @@ import { ScrtConnector }  from './scrtConnector.mjs';
 import { Server } from 'socket.io';
 import { initOttApp }  from './ottAppServer.mjs';
 import { agentWorkCache } from './ottAppLib/sfdc-byocc-agentwork-api.mjs';
+import NodeCache from 'node-cache';
 
 customEnv.env();
 const app = express();
@@ -22,6 +23,7 @@ app.use(express.json());
 let onlineUsers = new Map(); // username -> socket.id 
 let userFullNames = new Map(); // username -> FullName
 let connectors = new Set();
+const modeCache = new NodeCache();
 
 const server = app.listen(process.env.SERVER_PORT, () => {
     console.log(`\n====== App listening to ${process.env.SERVER_PORT}. Press Ctrl+C to quit.`);
@@ -56,8 +58,10 @@ io.on('connection', socket => {
 
     socket.on('presence', data => {
         if (data.isAvailable) {
+            console.log('User went online: ' + data.username);
             onlineUsers.set(data.username, socket.id);
             userFullNames.set(data.username, data.fullName);
+            ScrtConnector.setOnlineUserIds(data.username, data);
         } else {
             console.log('User went offline: ' + data.username);
             onlineUsers.delete(data.username);
@@ -130,7 +134,7 @@ app.post('/api/configureTenantInfo', (req, res) => {
     }
 });
 
-app.post('/api/executeOmniFlow', (req, res) => {
+app.patch('/api/executeOmniFlow', (req, res) => {
     ScrtConnector.executeOmniFlow(req.body).then(result => {
         console.log(`Omni Flow executed successfully : ${JSON.stringify(result.data)}`);
         res.send(result.data);
@@ -171,5 +175,47 @@ app.post('/api/clear-agent-work-cache', (req,res) => {
     } catch (err) {
         console.log(`Error deleting ${workItemId} from agentWorkCache: \n ${err}`);
         res.send({ success: false });
+    }
+});
+
+app.post('/api/fetchServer', (req, res) => {
+    try {
+        if (req.body.method==='GET') {
+            return fetch(`http://localhost:3030${req.body.endpoint}`, {
+                method: req.body.method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+            }).then(response => response.json()).then((result) => {
+                res.send(result)
+                return result;
+            })
+        } else {
+            return fetch(`http://localhost:3030${req.body.endpoint}`, {
+                method: req.body.method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({...req.body})
+            }).then(response => response.json()).then((result) => {
+                res.send(result)
+                return result;
+            })
+        }
+    } catch(err) {
+        console.log(`Error ${err}`);
+    }
+});
+
+app.post('/api/setOrgMode', (req, res) => {
+    try {
+        if (req && req.body) {
+            modeCache.set('orgMode', req.body.orgMode);
+            console.log(`Org Mode set to ${req.body.orgMode}`);
+            res.send({ success: true});
+        }
+    } catch (err) {
+        console.log(`Error setting Org mode to cache: ${err}`);
+        res.send({ success: false});
     }
 });

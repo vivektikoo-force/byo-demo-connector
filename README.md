@@ -18,16 +18,15 @@ The developer environment requires [Node](https://nodejs.org/en/download/), [NPM
 #### Clone this repo
 
 ```
-$ git clone https://github.com/salesforce-misc/byo-demo-connector.git
+$ git clone https://git.soma.salesforce.com/hvcc/ccaas-demo-connector.git
 ```
 
 #### Install npm dependencies
 
 ```
-$ cd byo-demo-connector
+$ cd ccaas-demo-connector
 $ npm install
 ```
-
 ### Config Setup
 
 ```
@@ -83,14 +82,14 @@ SF_AUTHORIZATION_CONTEXT=<ConversationChannelDefinition API Name>[^9]
 CHANNEL_ADDRESS_IDENTIFIER=<Channel address identifier> [^6]
 END_USER_CLIENT_IDENTIFIER=<End user client identifier>
 PORT=3000
-IS_OTT=true[^8]
+IS_LOCAL_CONFIG=true[^8]
 API_VERSION=<Ex: "63.0" API version for the current release of salesforce app>[^10]
 SF_PASSWORD=<admin user password>[^11]
 ```
 
 #### Setup "BYO CCaaS" application for messaging
 
-Complete Setup "BYO OTT" application step above, update `IS_OTT` to `false`. Then replace all placeholder vars marked inside <> accordingly shown as below:
+Complete Setup "BYO OTT" application step above, update `IS_LOCAL_CONFIG` to `false`. Then replace all placeholder vars marked inside <> accordingly shown as below:
 
 ```
 ################# extra env vars for CCaaS (Messaging)
@@ -117,8 +116,8 @@ AUTO_CREATE_AGENT_WORK=<true or false>[^7][^9]
 - [^5] The value of \<Salesforce core app scrt2 instance url\> above is an url with the pattern of "https://\<your org my domain name\>.my.salesforce-scrt.com".
 - [^6] The value of \<Channel address identifier\> above is the value from field "ChannelAddressIdentifier" in corresponding MessagingChannel record.
 - [^7] Auto create agent work boolean flag is used to specify if agent work should be created automatically when sending inbound messages.
-- [^8] Specify if it's an OTT only, applying to the circumstance of no contact center
-- [^9] No need to specify if you choose IS_OTT=false
+- [^8] Specify if it reads configuration from env or from core. Under the circumstance of no contact center, please select true.
+- [^9] No need to specify if you choose IS_LOCAL_CONFIG=false
 - [^10] The API version for the current release of salesforce app. This should be specified in the format "XX.0", where XX is the version number. For example, "62.0".
 - [^11] The admin password for the Salesforce instance. Ensure this is securely stored and not exposed in public repositories.
 
