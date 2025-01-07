@@ -14,7 +14,7 @@ export function initializeBYOOTTAppController(connector) {
                 switch (event.data.type) {
                     case Constants.GET_AGENT_CONFIG: {
                         const { agentConfig, contactCenterChannels, agentId, userPresenceStatuses, isSCVMultipartyAllowed } = connector.sdk.state;
-                        connector.sdk.messageUser(event.fromUsername, 
+                        connector.sdk.messageUser(event.fromUsername,
                                                   Constants.AGENT_CONFIG,
                                                  {
                                                     type: Constants.AGENT_CONFIG,
