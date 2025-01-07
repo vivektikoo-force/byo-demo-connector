@@ -996,7 +996,7 @@ function generateEventMessageHTMLElem(message) {
     '  <div class="slds-chat-event">' +
     '    <div class="slds-chat-event__body">' +
     '      <div class="slds-chat-event__agent-message">' +
-    '					<p>' + dateTime + '</p>' +
+    '        <p>' + dateTime + '</p>' +
     '        <span>' + replaceURLsWithHyperLinks(message) +
     '        </span>' +
     '      </div>' +
