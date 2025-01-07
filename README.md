@@ -153,4 +153,4 @@ $ gulp bundle --mode prod
 Certain features (e.g. voice call transcripts) depend on the telephony integration service to work. In order for the demo connector to be able to authenticate with it, you need to set the private key in `src/server/private.key` to match the public key that you created your call center with. If you don't want to create a new key pair you can use the one in `src/server/cert.pem`
 
 ## Contributing and Developing Locally
-We welcome contributors into our repo. Please read the [contributing guidelines](https://github.com/salesforce/demo-scv-connector/blob/master/CONTRIBUTING.md) for more information.
+We welcome contributors into our repo. Please read the [contributing guidelines](https://github.com/salesforce-misc/byo-demo-connector/blob/main/CONTRIBUTING.md) for more information.
