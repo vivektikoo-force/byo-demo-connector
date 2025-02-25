@@ -219,6 +219,29 @@ window.addEventListener("load", () => {
           
           appendAgentActionVisibilities(formData);
           break;
+        case "POST_CONVERSATION":
+          formData = {
+            "apiName": document.getElementById("selected-api-name").value,
+            "channelAddressIdentifier" : document.getElementById("channelAddressIdentifierConv").value,
+            "endUserClientIdentifier" : document.getElementById("endUserClientIdentifierConv").value
+          };
+          break;
+        case "POST_CONVERSATION_HISTORY":
+            if (Object.keys(conversationParticipantsBody).length === 0) {
+              conversationsPayload.classList.remove('slds-hide');
+              document.getElementById('conversationsPayload').textContent = 'Please upload a valid JSON file.';
+              runButton.disabled = true;
+            } else if (Object.keys(conversationEntriesBody).length === 0) {
+              conversationEntries.classList.remove('slds-hide');
+              document.getElementById('conversationEntries').textContent = 'Please upload a valid JSON file.';
+              runButton.disabled = true;
+            } else {
+              formData.participants = conversationParticipantsBody;
+              formData.entries = conversationEntriesBody;
+              formData.channelAddressIdentifier = document.getElementById("channelAddressIdentifierHistory").value,
+              formData.apiName = document.getElementById("selected-api-name").value;
+            }
+            break;
         default:
           throw Error('Not a valid API selected');
       }
@@ -253,6 +276,8 @@ window.addEventListener("load", () => {
   const consentAPIContainer = document.getElementById("consentAPIContainer");
   const patchRegisterCapabilitiesAPIContainer = document.getElementById("patchRegisterCapabilitiesAPIContainer");
   const postAgentWorkAPIContainer = document.getElementById("postAgentWorkAPIContainer");
+  const postConversationAPIContainer = document.getElementById("postConversationAPIContainer");
+  const postConversationHistoryAPIContainer = document.getElementById("postConversationHistoryAPIContainer");
   const apiDropdown = document.getElementById("selected-api-name");
   apiDropdown.addEventListener("change", (event) => {
     const selectedAPI = event.target.value;
@@ -265,6 +290,8 @@ window.addEventListener("load", () => {
         postRouteResultAPIContainer.classList.add("slds-hide");
         patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
         postAgentWorkAPIContainer.classList.add("slds-hide");
+        postConversationAPIContainer.classList.add("slds-hide");
+        postConversationHistoryAPIContainer.classList.add("slds-hide");
         break;
       case "POST_ROUTE":
         postRouteAPIContainer.classList.remove("slds-hide");
@@ -273,6 +300,8 @@ window.addEventListener("load", () => {
         postRouteResultAPIContainer.classList.add("slds-hide");
         patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
         postAgentWorkAPIContainer.classList.add("slds-hide");
+        postConversationAPIContainer.classList.add("slds-hide");
+        postConversationHistoryAPIContainer.classList.add("slds-hide");
         break;
       case "DELETE_ROUTE":
         consentAPIContainer.classList.add("slds-hide");
@@ -281,6 +310,8 @@ window.addEventListener("load", () => {
         postRouteResultAPIContainer.classList.add("slds-hide");
         patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
         postAgentWorkAPIContainer.classList.add("slds-hide");
+        postConversationAPIContainer.classList.add("slds-hide");
+        postConversationHistoryAPIContainer.classList.add("slds-hide");
         break;
       case "POST_ROUTING_RESULT":
         consentAPIContainer.classList.add("slds-hide");
@@ -289,6 +320,8 @@ window.addEventListener("load", () => {
         postRouteResultAPIContainer.classList.remove("slds-hide");
         patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
         postAgentWorkAPIContainer.classList.add("slds-hide");
+        postConversationAPIContainer.classList.add("slds-hide");
+        postConversationHistoryAPIContainer.classList.add("slds-hide");
         break;
       case "PATCH_REGISTER_CAPABILITIES":
         consentAPIContainer.classList.add("slds-hide");
@@ -298,6 +331,8 @@ window.addEventListener("load", () => {
         patchRegisterCapabilitiesAPIContainer.classList.remove("slds-hide");
         capabilitiesPayload.classList.add("slds-hide");
         postAgentWorkAPIContainer.classList.add("slds-hide");
+        postConversationAPIContainer.classList.add("slds-hide");
+        postConversationHistoryAPIContainer.classList.add("slds-hide");
         break;
       case "POST_AGENT_WORK":
         consentAPIContainer.classList.add("slds-hide");
@@ -306,6 +341,28 @@ window.addEventListener("load", () => {
         deleteRouteAPIContainer.classList.add("slds-hide");
         postRouteResultAPIContainer.classList.add("slds-hide");
         patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
+        postConversationAPIContainer.classList.add("slds-hide");
+        postConversationHistoryAPIContainer.classList.add("slds-hide");
+        break;
+      case "POST_CONVERSATION":
+        consentAPIContainer.classList.add("slds-hide");
+        postAgentWorkAPIContainer.classList.add("slds-hide");
+        postRouteAPIContainer.classList.add("slds-hide");
+        deleteRouteAPIContainer.classList.add("slds-hide");
+        postRouteResultAPIContainer.classList.add("slds-hide");
+        patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
+        postConversationAPIContainer.classList.remove("slds-hide");
+        postConversationHistoryAPIContainer.classList.add("slds-hide");
+        break;
+      case "POST_CONVERSATION_HISTORY":
+        consentAPIContainer.classList.add("slds-hide");
+        postAgentWorkAPIContainer.classList.add("slds-hide");
+        postRouteAPIContainer.classList.add("slds-hide");
+        deleteRouteAPIContainer.classList.add("slds-hide");
+        postRouteResultAPIContainer.classList.add("slds-hide");
+        patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
+        postConversationAPIContainer.classList.add("slds-hide");
+        postConversationHistoryAPIContainer.classList.remove("slds-hide");
         break;
       default:
         consentAPIContainer.classList.add("slds-hide");
@@ -314,6 +371,8 @@ window.addEventListener("load", () => {
         postRouteResultAPIContainer.classList.add("slds-hide");
         patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
         postAgentWorkAPIContainer.classList.add("slds-hide");
+        postConversationAPIContainer.classList.add("slds-hide");
+        postConversationHistoryAPIContainer.classList.add("slds-hide");
         break;
     }
   });
@@ -446,6 +505,50 @@ window.addEventListener("load", () => {
     }
   });
 
+  let conversationParticipantsBody = {};
+  let conversationEntriesBody = {};
+  const conversationParticipantsPayload = document.getElementById('conversationsPayload');
+  const conversationEntriesPayload = document.getElementById('entriesPayload');
+  // Get the contents from the uploaded JSON file for Conversation Particiapnts and ConversationEntries.
+  document.getElementById('conversationParticipants').addEventListener('change', async function(event) {
+    await readFilesForConversationHistory (event, conversationParticipantsPayload, 'conversationsPayload');
+    console.log(conversationParticipantsBody);
+  });
+  document.getElementById('conversationEntries').addEventListener('change', async function(event) {
+    await readFilesForConversationHistory(event, conversationEntriesPayload, 'entriesPayload');
+    console.log(conversationEntriesBody);
+  });
+
+  function readFilesForConversationHistory(event, payloadUiText, payloadElementId) {
+    return new Promise(() => {
+      const file = event.target.files[0];
+      payloadUiText.classList.remove('slds-hide');
+
+      if (file && file.type === "application/json") {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            const json = JSON.parse(e.target.result);
+            payloadUiText.textContent = JSON.stringify(json, null, 2);
+            if (payloadElementId === 'conversationsPayload') {
+              conversationParticipantsBody = json;
+            } if (payloadElementId === 'entriesPayload'){
+              conversationEntriesBody = json;
+            }
+            runButton.disabled = false;
+          } catch (error) {
+            payloadUiText.textContent = 'Error parsing JSON: ' + error.message;
+            runButton.disabled = true;
+          }
+        };
+        reader.readAsText(file);
+      } else {
+        document.getElementById(payloadElementId).textContent = 'Please upload a valid JSON file.';
+        runButton.disabled = true;
+      }
+    });
+  }
+
   // Register custom event to retrieve the replied message from an agent in core app
   const evtSource = new EventSource(SERVER_URL + "/replyMessage");
   evtSource.addEventListener("replymsg", (e) => {
@@ -465,7 +568,18 @@ window.addEventListener("load", () => {
   });
 
   if(document.getElementById('healthCheckButton')) {
-    document.getElementById('healthCheckButton').addEventListener('click', runHealthCheck);
+    axios({
+      method: "get",
+      url: SERVER_URL + "/getOrgMode"
+    }).then((res) => {
+      if (res && res.data && res.data.orgMode !== 'VOICE_ONLY') {
+        // show healthTab
+        document.getElementById('healthCheckTab').classList.remove("slds-hide");
+
+        // Register event for check button
+        document.getElementById('healthCheckButton').addEventListener('click', runHealthCheck);
+      }
+    });
   }
 
   function appendAgentActionVisibilities(formData) {
@@ -682,7 +796,7 @@ function getSettingsForApp() {
         document.getElementById("customEventPayloadField").value = settings.customEventPayloadField;
         document.getElementById("customEventTypeField").value = settings.customEventTypeField;
         if (document.getElementById("customPlatformEvent")) {
-          document.getElementById("customPlatformEvent").value = settings.customPlatformEvent.split('/')[2];
+          document.getElementById("customPlatformEvent").value = settings.customPlatformEvent;
         }
         if (document.getElementById("userId")) {
           document.getElementById("userId").value = settings.userId;
@@ -697,11 +811,8 @@ function getSettingsForApp() {
         }
         endUserClientName = settings.endUserClientIdentifier;
 
-        const isOTT = settings.isOTT === 'true';
-        
-        // Ensuring the demo connector runs gracefully even if the .env is not present for CCaaS
-        // Skip /getConversationChannelDefinitions call for OTT
-        if (isOTT || !settings.authorizationContext) {
+        // Ensuring the demo connector runs gracefully even if the .env is not present
+        if (!settings.authorizationContext) {
           return null;
         } else {
           return axios({
@@ -767,7 +878,7 @@ function getSettingsForApp() {
           console.log("No records found in the CCD data");
         }
       } else {
-        console.log("Invalid CCD response or skip fetching CCD data");
+        console.log("Invalid CCD response");
       }
     })
     .catch((err) => {
@@ -999,7 +1110,7 @@ function generateEventMessageHTMLElem(message) {
     '  <div class="slds-chat-event">' +
     '    <div class="slds-chat-event__body">' +
     '      <div class="slds-chat-event__agent-message">' +
-    '        <p>' + dateTime + '</p>' +
+    '					<p>' + dateTime + '</p>' +
     '        <span>' + replaceURLsWithHyperLinks(message) +
     '        </span>' +
     '      </div>' +

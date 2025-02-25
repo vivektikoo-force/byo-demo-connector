@@ -17,7 +17,7 @@ style="background-color: #fafaf9"
 xmlns="http://www.w3.org/2000/svg"
 xmlns:xlink="http://www.w3.org/1999/xlink">
 <head>
-    <title>Demo Phone Simulator</title>
+    <title>SCV Simulator</title>
     <!-- uncomment and replace with line below for use in visualforce page <link rel="stylesheet" type="text/css" href="{!$Resource.slds_stylesheet}" media="screen"/> -->
     <link rel="stylesheet" type="text/css" href="/Assets/slds-stylesheet.css" media="screen"></link>
     <link rel="stylesheet" type="text/css" href="/Assets/ottapp.css" media="screen"></link>
@@ -1113,7 +1113,7 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
             <div class="slds-card__body slds-card__body_inner">Speaker</div>
             <div class="slds-form-element__control slds-input-has-fixed-addon">
                 <div class="slds-button-group slds-button_stretch" role="group">
-                    <button class="slds-button slds-button_brand slds-button_stretch" id="sender-types-title">Customer</button>
+                    <button class="slds-button slds-button_brand slds-button_stretch" id="sender-types-title">Select Sender Type</button>
                     <div class="slds-dropdown-trigger slds-dropdown-trigger_click slds-button_last" id="sender-types-options">
                         <button class="slds-button slds-button_icon slds-button_icon-brand" aria-haspopup="true" title="Sender type options" id="sender-types">
                             <svg class="slds-button__icon" aria-hidden="true">
@@ -1170,7 +1170,81 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
         </div>
     </div>
 </article>
-<article class="slds-card">
+<article class="slds-card" id="consult-transcription-article">
+  <div class="slds-card__header slds-grid">
+      <header class="slds-media slds-media_center slds-has-flexi-truncate">
+          <div class="slds-media__body">
+              <h2 class="slds-card__header-title">
+                  <a href="javascript:void(0);" class="slds-card__header-link slds-truncate" title="Accounts">
+                      <span>Consult Call Transcript</span>
+                  </a>
+              </h2>
+          </div>
+      </header>
+  </div>
+
+  <div class="slds-card__body slds-card__body_inner">Simulate a real-time consult call transcript. Select a speaker and enter a statement or question. For example, select Human agent and enter “Hello, how can I help you?”. Build out the transcript by switching between speakers. Comments appear in the Conversation Body component on the Consult Voice Call record.</div>
+  <div class="slds-card__body slds-card__body_inner">
+      <div class="slds-form-element">
+          <label class="slds-form-element__label" for="form-element-01">Consult Voice Call <strong>vendorCallKey</strong>
+              <div class="slds-form-element__control">
+                  <input type="text" id="consult-transcription-vendor-call-key" placeholder="Consult Voice Call vendorCallKey" class="slds-input"></input>
+              </div>
+      </div>
+      <div class="slds-form-element">
+          <label class="slds-form-element__label" for="form-element-01">External User ID (Only use when selecting External User)</label>
+          <div class="slds-form-element__control">
+              <input type="text" id="consult-transcription-external-user-id" placeholder="Consult External User ID" class="slds-input"></input>
+          </div>
+      </div>
+  </div>
+  <div class="slds-card__body slds-card__body_inner">
+      <div class="slds-form-element slds-m-bottom_medium">
+          <div class="slds-card__body slds-card__body_inner">Speaker</div>
+          <div class="slds-form-element__control slds-input-has-fixed-addon">
+              <div class="slds-button-group slds-button_stretch" role="group">
+                  <button class="slds-button slds-button_brand slds-button_stretch" id="consult-sender-types-title">Select Sender Type</button>
+                  <div class="slds-dropdown-trigger slds-dropdown-trigger_click slds-button_last" id="consult-sender-types-options">
+                      <button class="slds-button slds-button_icon slds-button_icon-brand" aria-haspopup="true" title="Sender type options" id="consult-sender-types">
+                          <svg class="slds-button__icon" aria-hidden="true">
+                              <!-- uncomment and replace with line below for use in visualforce page <use xlink:href="{!$Resource.symbols}#hide"></use> -->
+                              <use xlink:href="/Assets/symbols.svg#down"></use>
+                          </svg>
+                          <span class="slds-assistive-text">Sender type options</span>
+                      </button>
+                      <div class="slds-dropdown slds-dropdown_right slds-dropdown_actions">
+                          <ul class="slds-dropdown__list" role="menu">
+                              <li class="slds-dropdown__item" role="presentation">
+                                  <a id="consult-humanAgentButton" href="javascript:void(0);" role="menuitem" tabindex="0">
+                                      <span class="slds-truncate" title="Human Agent">Human agent</span>
+                                  </a>
+                              </li>
+                              <li class="slds-dropdown__item" role="presentation">
+                                  <a id="consult-supervisorButton" href="javascript:void(0);" role="menuitem" tabindex="1">
+                                      <span class="slds-truncate" title="Supervisor">Supervisor</span>
+                                  </a>
+                              </li>
+                              <li class="slds-dropdown__item" role="presentation">
+                                  <a id="consult-virtualAgentButton" href="javascript:void(0);" role="menuitem" tabindex="2">
+                                      <span class="slds-truncate" title="End user">Unknown agent</span>
+                                  </a>
+                              </li>
+                              <li class="slds-dropdown__item" role="presentation">
+                                  <a id="consult-externalUserButton" href="javascript:void(0);" role="menuitem" tabindex="3">
+                                      <span class="slds-truncate" title="External User">External User</span>
+                                  </a>
+                              </li>
+                          </ul>
+                      </div>
+                  </div>
+              </div>
+              <input type="text" id="consult-transcription-text-view" placeholder="Write a message..." aria-labelledby="fixed-text-label fixed-text-addon-pre fixed-text-addon-post" class="slds-input"></input>
+              <button class="slds-button slds-button_outline-brand slds-button_stretch" id="consult-send-transcription">Add to Transcript</button>
+          </div>
+      </div>
+  </div>
+</article>
+    <article class="slds-card">
     <div class="slds-card__header slds-grid">
         <header class="slds-media slds-media_center slds-has-flexi-truncate">
             <div class="slds-media__body">
@@ -1760,6 +1834,8 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                                             <option value="POST_ROUTING_RESULT">POST RoutingResult</option>
                                             <option value="PATCH_REGISTER_CAPABILITIES">PATCH Capabilities</option>
                                             <option value="POST_AGENT_WORK">POST AgentWork</option>
+                                            <option value="POST_CONVERSATION_HISTORY">POST Conversation History</option>
+                                            <option value="POST_CONVERSATION">POST Conversation</option>
                                         </select>
                                     </div>
                                 </div>
@@ -2022,6 +2098,46 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                                         </div>
                                     </div>
                                 </div>
+                                <div id = "postConversationAPIContainer" class="slds-hide">
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label" for="channelAddressIdentifierConv"><abbr class="slds-required" title="required">* </abbr>Channel Address Identifier</label>
+                                        <div class="slds-form-element__control">
+                                            <input type="text" id="channelAddressIdentifierConv" placeholder="Channel Address Identifier" class="slds-input" />
+                                        </div>
+                                    </div>
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label" for="endUserClientIdentifierConv"><abbr class="slds-required" title="required">* </abbr>End User Client Identifier</label>
+                                        <div class="slds-form-element__control">
+                                            <input type="text" id="endUserClientIdentifierConv" placeholder="End User Client Identifier" class="slds-input" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id = "postConversationHistoryAPIContainer" class="slds-hide">
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label" for="channelAddressIdentifierHistory"><abbr class="slds-required" title="required">* </abbr>Channel Address Identifier</label>
+                                        <div class="slds-form-element__control">
+                                            <input type="text" id="channelAddressIdentifierHistory" placeholder="Channel Address Identifier" class="slds-input" />
+                                        </div>
+                                    </div>
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <abbr class="slds-required" title="required">* </abbr><label class="slds-form-element__label" for="ConversationHistory">Conversation Participants</label>
+                                        <div class="slds-form-element__control">
+                                            <input type="file" id="conversationParticipants" name="conversationParticipants"  accept=".json">
+                                        </div>
+                                        <div class="slds-m-top_small slds-m-bottom_snall flex-row">
+                                            <textarea id="conversationsPayload" disabled="" placeholder="Payloads of Conversation Participants..." class="slds-textarea textarea-output"></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <abbr class="slds-required" title="required">* </abbr><label class="slds-form-element__label" for="ConversationHistory">Conversation Entries</label>
+                                        <div class="slds-form-element__control">
+                                            <input type="file" id="conversationEntries" name="conversationEntries"  accept=".json">
+                                        </div>
+                                        <div class="slds-m-top_small slds-m-bottom_snall flex-row">
+                                            <textarea id="entriesPayload" disabled="" placeholder="Payloads of Conversation Entries..." class="slds-textarea textarea-output"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="slds-form-element slds-form-element_stacked">
                                     <div class="slds-p-top_small slds-p-bottom_small ">
                                         <button type="submit" class="slds-button slds-button_brand slds-button_stretch" id="run-selected-api-button">Run</button>
@@ -2060,10 +2176,11 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
 
 </div>
 </div>
-<!--------- Tabset - End: ----------->
-<!----------------------------------->
+<!-- ------- Tabset - End: --------- -->
+<!-- ------------------------------- -->
+ 
 </div>
-<div class="slds-card health-check-card">
+<div class="slds-card health-check-card slds-hide" id="healthCheckTab">
     <div class="slds-card__header slds-grid">
         <header class="slds-media slds-media_center slds-has-flexi-truncate">
             <div class="slds-media__figure">

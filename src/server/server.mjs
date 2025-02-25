@@ -41,7 +41,9 @@ io.on('connection', socket => {
         } else {
             console.log('Salesforce User joined as Agent : ' + data.username);
             socket.join(data.username);
+            socket.join(data.id);
             connectors.add(data.username);
+            connectors.add(data.id);
         }
         socket.broadcast.emit('connectors', { connectors : [...connectors.keys()] });
     });
@@ -60,6 +62,7 @@ io.on('connection', socket => {
         if (data.isAvailable) {
             console.log('User went online: ' + data.username);
             onlineUsers.set(data.username, socket.id);
+            onlineUsers.set(data.userId, socket.id);
             userFullNames.set(data.username, data.fullName);
             ScrtConnector.setOnlineUserIds(data.username, data);
         } else {

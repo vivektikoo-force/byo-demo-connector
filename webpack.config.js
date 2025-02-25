@@ -23,9 +23,9 @@ module.exports = {
         },
         host: '0.0.0.0',
         proxy: {
-            '/api': !process.env.IS_OTT ? process.env.SERVER_URL : 'dummyUrl',
+            '/api': process.env.SERVER_URL,
             '/socket.io': {
-                target: !process.env.IS_OTT ? process.env.SERVER_URL : 'dummyUrl',
+                target: process.env.SERVER_URL,
                 ws: true
             },
         },

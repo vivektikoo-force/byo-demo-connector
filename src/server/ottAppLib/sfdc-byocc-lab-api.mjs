@@ -1,15 +1,17 @@
-import {getAccessToken} from './sfdc-auth.mjs';
-import {sendConsentAPIRequest} from './sfdc-byocc-consent-api.mjs';
-import {sendPostRouteAPIRequest} from './sfdc-byocc-post-route-api.mjs';
-import {sendDeleteRouteAPIRequest} from './sfdc-byocc-delete-route-api.mjs';
-import {sendPostRoutingResultAPIRequest} from './sfdc-byocc-post-routing-result-api.mjs';
-import {sendPatchRegisterCapabilitiesAPIRequest} from'./sfdc-byocc-patch-register-capabilities-api.mjs';
+import { getAccessToken } from './sfdc-auth.mjs';
+import { sendConsentAPIRequest } from './sfdc-byocc-consent-api.mjs';
+import { sendPostRouteAPIRequest } from './sfdc-byocc-post-route-api.mjs';
+import { sendDeleteRouteAPIRequest } from './sfdc-byocc-delete-route-api.mjs';
+import { sendPostRoutingResultAPIRequest } from './sfdc-byocc-post-routing-result-api.mjs';
+import { sendPatchRegisterCapabilitiesAPIRequest } from'./sfdc-byocc-patch-register-capabilities-api.mjs';
+import { sendConversationHistoryRequest } from './sfdc-byocc-post-conversation-history-api.mjs';
+import { sendConversationAPIRequest } from './sfdc-byocc-post-conversation-api.mjs';
 import { v4 as uuidv4} from 'uuid';
 import { agentWork } from './sfdc-byocc-agentwork-api.mjs';
 import { settingsCache } from '../ottAppServer.mjs';
 import { getTimeStampForLoglines } from '../util.mjs';
 
-// Get config metadata from .env
+//Get config metadata from .env
 const {
   SF_ORG_ID,
   SF_AUTHORIZATION_CONTEXT
@@ -62,8 +64,20 @@ export async function sendRunApiLabRequest(req) {
       }
       case "POST_AGENT_WORK": {
         console.log(getTimeStampForLoglines() + 'Sending Agent Work API post request...');
-        responseData = await agentWork( SF_ORG_ID, SF_AUTHORIZATION_CONTEXT, req.body.conversationIdentifier, req.body.workItemId, req.body.agentActionVisibilities);
+        responseData = await agentWork( SF_ORG_ID, SF_AUTHORIZATION_CONTEXT, req.body.conversationIdentifier, req.body.workItemId, req.body.agentActionVisibilities, req.body.userId);
         console.log(getTimeStampForLoglines() + 'Agent Work API post request sent.');
+        break;
+      }
+      case "POST_CONVERSATION_HISTORY": {
+        console.log(getTimeStampForLoglines() + 'Sending Conversation History API post request...');
+        responseData = await sendConversationHistoryRequest(req, requestHeader);
+        console.log(getTimeStampForLoglines() + 'Conversation History API post request sent.');
+        break;
+      }
+      case "POST_CONVERSATION": {
+        console.log(getTimeStampForLoglines() + 'Sending Conversation API post request...');
+        responseData = await sendConversationAPIRequest(req, requestHeader);
+        console.log(getTimeStampForLoglines() + 'Conversation API post request sent.');
         break;
       }
     }

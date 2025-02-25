@@ -14,7 +14,8 @@ import { getTimeStampForLoglines } from '../util.mjs';
 
 // Get config metadata from .env
 const {
-  SF_SCRT_INSTANCE_URL // OTT-needed
+  SF_SCRT_INSTANCE_URL, // OTT-needed
+  USER_ID
 } = process.env;
 const IS_LOCAL_CONFIG = process.env.IS_LOCAL_CONFIG === "true";
 /**
@@ -308,6 +309,7 @@ function getSFInboundMessageDeliveryFailedFormData(entryId, channelAddressIdenti
 }
 
 function getInboundMessageRequestHeader(accessToken, orgId, authorizationContext) {
+  const uuid = uuidv4();
   return {
     headers: {
       "Authorization": `Bearer ${accessToken}`,
@@ -315,7 +317,7 @@ function getInboundMessageRequestHeader(accessToken, orgId, authorizationContext
       "Accept": "application/json",
       "OrgId": orgId,
       "AuthorizationContext": authorizationContext,
-      "RequestId": "f8f81c06-c06a-4784-b96c-ca95d3321bd9"
+      "RequestId": uuid
     }
   };
 }
@@ -369,6 +371,6 @@ function checkAndCreateAgentWork(orgId, authorizationContext, routingOwner, inte
 
   console.log(getTimeStampForLoglines() + `workItemId:"${workItemId}"\n======= conversationIdentifier:"${conversationIdentifier}"`);
   if (workItemId !== null && conversationIdentifier !== null) {
-    agentWork(orgId, authorizationContext, conversationIdentifier, workItemId);
+    agentWork(orgId, authorizationContext, conversationIdentifier, workItemId, null, (IS_LOCAL_CONFIG ? USER_ID : settingsCache.get("userId")));
   }
 }

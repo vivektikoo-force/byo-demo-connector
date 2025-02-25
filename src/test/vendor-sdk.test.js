@@ -10,16 +10,15 @@ jest.mock('@salesforce/scv-connector-base', () => ({
     publishEvent: jest.fn(),
     log: jest.fn()
 }));
-
+import fetchMock from "jest-fetch-mock";
 import constants from './testConstants';
 import { publishEvent, log, GenericResult, PhoneCall, Contact, ParticipantResult, CallInfo, CallResult, DialOptions,
     LogoutResult, Constants, Phone, AgentStatusInfo, HangupResult, SupervisedCallInfo, PhoneCallAttributes, CustomError } from '@salesforce/scv-connector-base';
 import { Connector } from '../main/connector';
 
 global.console.log = jest.fn(); //do not print console.log 
-
+global.fetch = fetchMock;
 jest.useFakeTimers();
-            
 describe('Vendor Sdk tests', () => {
     const connector = new Connector();
     const telephonyConnector = connector.getTelephonyConnector();
@@ -755,6 +754,44 @@ describe('Vendor Sdk tests', () => {
             }
         });
 
+        it('[MP] Should call PARTICIPANT_CONNECTED when primary caller hangs up', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            const initialContact = new Contact({ id: 'dummyUser', phoneNumber: '100', type: Constants.CONTACT_TYPE.AGENT});
+            const initialCall = {
+                    "callAttributes": {
+                        "initialCallHasEnded": false,
+                        "isOnHold": false,
+                        "participantType": "Initial_Caller"
+                    },
+                    "callId": "dummyCallId2",
+                    "callInfo": globalDummyCallInfo,
+                    "callType": "inboundcall",
+                    "contact": initialContact,
+                    "phoneNumber": "100",
+                    "receiverContact": {}, "state": "ringing"};
+            const transferContact = new Contact({ id: 'dummyUser2', phoneNumber: '200', type: Constants.CONTACT_TYPE.AGENT});
+            const transferCallResult = await telephonyConnector.dial(transferContact);
+            const { call } = transferCallResult;
+            call.callInfo = new CallInfo({renderContactId: "dummyUser"});
+            vendorSdk.addCall(call);
+            const acceptCallResult = await telephonyConnector.acceptCall(call);
+            vendorSdk.addCall(initialCall);
+
+            // check that transfer call is created
+            expect(vendorSdk.state.activeCalls).not.toBeNull();
+            expect(Object.keys(vendorSdk.state.activeCalls).length).toEqual(2);
+            expect(vendorSdk.getCall({callId:acceptCallResult.call.callId})).not.toBeNull();
+
+            // broadcast info of destroying the first call
+            const messageData = {callId :initialCall.callId, target: 'dummyUser'};
+            vendorSdk.processCallDestroyed(messageData);
+
+            // expect passing the condition check in processCallDestroyed
+            expect(vendorSdk.getPrimaryCall()).not.toBeNull();
+            expect(vendorSdk.getPrimaryCall().callInfo.renderContactId).not.toBeNull();
+            expect(vendorSdk.getPrimaryCall().callInfo.renderContactId).toEqual(messageData.target);
+        });
+
         it('Should return a valid call result on endCall for Agent for Initial Caller & Third party', async () => {
             await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             await vendorSdk.startInboundCall(dummyPhoneNumber, { participantType: constants.PARTICIPANT_TYPE.THIRD_PARTY });
@@ -1129,6 +1166,12 @@ describe('Vendor Sdk tests', () => {
     });
 
     describe('conference', () => {
+        afterEach(() => {
+            vendorSdk.state.isMultipartyAllowed = false;
+            vendorSdk.state.isConsultAllowed = false;
+            vendorSdk.state.capabilities.canConsult = false;
+        });
+
         it('Should return a valid conference result on conference', async () => {
             const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const call1 = startCallResult1.call;
@@ -1139,6 +1182,103 @@ describe('Vendor Sdk tests', () => {
             const result = await telephonyConnector.conference(calls);
             expect(result.isThirdPartyOnHold).toBeFalsy();
             expect(result.isCustomerOnHold).toBeFalsy();
+        });
+
+        it('Should return a valid conference result on conference with MPC and Transfer', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            vendorSdk.state.isConsultAllowed = true;
+            vendorSdk.state.capabilities.canConsult = true;
+            vendorSdk.state.agentAvailable = true;
+
+            const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            const call1 = startCallResult1.call;
+            const dialOptions = {
+                isConsultCall : true
+            };
+            const contact = new Contact({ phoneNumber: '100', type: Constants.CONTACT_TYPE.AGENT});
+            const startCallResult2 = await telephonyConnector.dial(contact, dialOptions);
+            const call2 = startCallResult2.call;
+            const calls = [call1, call2];
+
+            const result = await telephonyConnector.conference(calls);
+            expect(result.isThirdPartyOnHold).toBeFalsy();
+            expect(result.isCallMerged).toBeTruthy();
+            // expect(vendorSdk.messageUser).toBeCalledWith(null, constants.USER_MESSAGE.MERGE, expect.anything());
+
+            const message = {
+                messageType: constants.USER_MESSAGE.MERGE,
+                data: {
+                    callId : call2.callId,
+                    consultCall : call2,
+                    activeConferenceCalls: calls
+                },
+                fromUsername: "dummyUsername"
+            };
+            vendorSdk.handleSocketMessage(message);
+            expect(call2.callAttributes.isConsultCall).toBeFalsy();
+        });
+
+        it('should publish call started event when fireCallStarted is true and is not a softphone call', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            const contact = new Contact({ id: 'dummyUser', phoneNumber: '100', type: Constants.CONTACT_TYPE.PHONENUMBER});
+            const callInfo = { isSoftphoneCall: false };
+            const callResult=  await vendorSdk.dial(contact, callInfo, true, false, false);
+            expect(callResult.call.callType).toBe(Constants.CALL_TYPE.OUTBOUND.toLowerCase());
+            expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.CALL_STARTED, payload: callResult});
+        });
+
+        it('should not publish call started event when fireCallStarted is false and is not a softphone call', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            const contact = new Contact({ id: 'dummyUser', phoneNumber: '100', type: Constants.CONTACT_TYPE.PHONENUMBER});
+            const callInfo = { isSoftphoneCall: true };
+            const callResult =  await vendorSdk.dial(contact, callInfo, true, false, false);
+            expect(callResult.call.callType).toBe(Constants.CALL_TYPE.OUTBOUND.toLowerCase());
+            expect(publishEvent).toBeCalledTimes(0);
+        });
+    
+        it('Should reject an outbound call if an active call exists', async () => {
+            const contact = new Contact({ phoneNumber: '300', type: Constants.CONTACT_TYPE.AGENT });
+            try {
+                await telephonyConnector.dial(contact, {})
+            } catch(e) {
+                expect(e.message).toEqual("Agent is not available for an outbound call");
+            }
+        });
+    
+        it('Should start an internal agent-to-agent call', async () => {
+            const contact = new Contact({ phoneNumber: '400', type: Constants.CONTACT_TYPE.AGENT });
+            const result = await telephonyConnector.dial(contact, {});
+            expect(result.call).toBeDefined();
+            expect(result.call.callType).toEqual(Constants.CALL_TYPE.INTERNAL_CALL.toLowerCase());
+        });
+        
+        it('Should correctly set call attributes for a callback', async () => {
+            const contact = new Contact({ phoneNumber: '600', type: Constants.CONTACT_TYPE.AGENT });
+            const callInfo = {};
+            const result = await vendorSdk.dial(contact, callInfo, false, true);
+            expect(result.call).toBeDefined();
+            expect(result.call.callType).toEqual(Constants.CALL_TYPE.DIALED_CALLBACK);
+        });
+        
+        it('Should return a valid conference result on conference with consult call', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            vendorSdk.state.isConsultAllowed = true;
+            vendorSdk.state.capabilities.canConsult = true;
+
+            const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            const call1 = startCallResult1.call;
+            const startCallResult2 = await vendorSdk.startInboundCall(dummyPhoneNumber, { participantType: constants.PARTICIPANT_TYPE.THIRD_PARTY });
+            const call2 = startCallResult2.call;
+            const contact = new Contact({ phoneNumber: '100', type: Constants.CONTACT_TYPE.AGENT});
+            const dialOptions = {
+                isConsultCall : true
+            };
+            const startCallResult3 = await telephonyConnector.dial(contact, dialOptions);
+            const call3 = startCallResult3.call;
+            const calls = [call3, call1, call2];
+
+            const result = await telephonyConnector.conference(calls);
+            expect(result.isCallMerged).toBeTruthy();
         });
     });
 
@@ -1281,6 +1421,31 @@ describe('Vendor Sdk tests', () => {
             expect(result.callInfo.callStateTimestamp).toBeInstanceOf(Date);
             expect(result.callId).not.toBeNull();
             expect(vendorSdk.messageUser).toBeCalledWith("dummyUser", constants.USER_MESSAGE.CALL_STARTED, expect.anything());
+        });
+
+        it('updateConferenceUsers with updateActiveCallToo true', async () => {
+            jest.useFakeTimers();
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            const { call } = startCallResult;
+            const contact = new Contact({ id: 'dummyUser', phoneNumber: dummyPhoneNumber });
+            await telephonyConnector.addParticipant(contact, call);
+            vendorSdk.updateConferenceUsers(true);
+            jest.runAllTimers();
+            expect(vendorSdk.state.activeCalls[call.callId]).toBe(call);
+        });
+
+        it('updateConferenceUsers with updateActiveCallToo false', async () => {
+            jest.useFakeTimers();
+            const startCallResult = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            const { call } = startCallResult;
+            const contact = new Contact({ id: 'dummyUser', phoneNumber: dummyPhoneNumber });
+            call.callInfo.isExternalTransfer = false;
+            let result = await telephonyConnector.addParticipant(contact, call);
+
+            vendorSdk.state.activeConferenceCalls = [call, result.call];
+            vendorSdk.updateConferenceUsers(false);
+            jest.runAllTimers();
+            expect(vendorSdk.state.activeCalls[call.callId].callAttributes.participantType).toBe(Constants.PARTICIPANT_TYPE.INITIAL_CALLER);
         });
     });
 
@@ -1632,19 +1797,22 @@ describe('Vendor Sdk tests', () => {
                     id: 'id1',
                     phoneNumber: "555-555-4441",
                     type: Constants.CONTACT_TYPE.PHONENUMBER,
-                    name: "AgentU"
+                    name: "AgentU",
+                    listType: Constants.CONTACT_LIST_TYPE.ALL
                 }),
                 new Contact({
                     id: 'id2',
                     type: Constants.CONTACT_TYPE.PHONEBOOK,
                     phoneNumber: "555-555-4442",
-                    name: "AgentV"
+                    name: "AgentV",
+                    listType: Constants.CONTACT_LIST_TYPE.TRANSFER
                 }),
                 new Contact({
                     id: 'id3',
                     type: Constants.CONTACT_TYPE.PHONENUMBER,
                     name: "AgentW",
-                    phoneNumber: "555-555-4443"
+                    phoneNumber: "555-555-4443",
+                    listType: Constants.CONTACT_LIST_TYPE.CONFERENCE
                 })
             ]
         });
@@ -1743,12 +1911,14 @@ describe('Vendor Sdk tests', () => {
                 new Contact({
                     id: 'id1',
                     type: Constants.CONTACT_TYPE.AGENT,
-                    name: "AgentU"
+                    name: "AgentU",
+                    listType: Constants.CONTACT_LIST_TYPE.ALL
                 }),
                 new Contact({
                     id: 'id2',
                     type: Constants.CONTACT_TYPE.QUEUE,
-                    name: "Queue1"
+                    name: "Queue1",
+                    listType: Constants.CONTACT_LIST_TYPE.TRANSFER
                 })
             ]
         });
@@ -2113,6 +2283,72 @@ describe('Vendor Sdk tests', () => {
             expect(argument.payload.stats[0].outputChannelStats.packetsLost).toEqual(audioStats.stats[0].outputChannelStats.packetsLost);
             expect(argument.payload.stats[0].outputChannelStats.jitterBufferMillis).toEqual(audioStats.stats[0].outputChannelStats.jitterBufferMillis);
             expect(argument.payload.stats[0].outputChannelStats.roundTripTimeMillis).toEqual(audioStats.stats[0].outputChannelStats.roundTripTimeMillis);
+        });
+    });
+
+    describe("executeOmniFlowForUnifiedRouting", () => {
+        beforeEach(() => {
+            fetchMock.enableMocks();
+          });
+        afterEach(() => {
+            fetchMock.resetMocks();
+          });
+        it("should successfully call API and return response", async () => {
+            fetchMock.mockResponseOnce(JSON.stringify({ success: true }));
+            const call = { voiceCallId: "12345" };
+            const flowConfig = {
+                dialedNumber: "9876543210",
+                flowDevName: "TestFlow",
+                fallbackQueue: "Queue1",
+                isTransferFlow: false
+            };
+            const response = await vendorSdk.executeOmniFlowForUnifiedRouting(call, flowConfig);
+            expect(fetchMock).toHaveBeenCalledWith("/api/executeOmniFlow", expect.objectContaining({
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    dialedNumber: "9876543210",
+                    voiceCallId: "12345",
+                    fallbackQueue: "Queue1",
+                    flowName: "TestFlow"
+                })
+            }));
+            expect(response).toEqual({ success: true });
+        });
+    
+        it("should include flowDevName when isTransferFlow is true", async () => {
+            fetchMock.mockResponseOnce(JSON.stringify({ success: true }));
+            const call = { voiceCallId: "12345" };
+            const flowConfig = {
+                dialedNumber: "9876543210",
+                flowDevName: "TestTransferFlow",
+                fallbackQueue: "Queue1",
+                isTransferFlow: true
+            };
+            const response = await vendorSdk.executeOmniFlowForUnifiedRouting(call, flowConfig);
+            expect(fetchMock).toHaveBeenCalledWith("/api/executeOmniFlow", expect.objectContaining({
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    dialedNumber: "9876543210",
+                    voiceCallId: "12345",
+                    fallbackQueue: "Queue1",
+                    flowDevName: "TestTransferFlow"
+                })
+            }));
+            expect(response).toEqual({ success: true });
+        });
+    
+        it("should handle API errors gracefully", async () => {
+            fetchMock.mockReject(new Error("Network Error"));
+            const call = { voiceCallId: "12345" };
+            const flowConfig = {
+                dialedNumber: "9876543210",
+                flowDevName: "TestFlow",
+                fallbackQueue: "Queue1",
+                isTransferFlow: false
+            };
+            await expect(vendorSdk.executeOmniFlowForUnifiedRouting(call, flowConfig)).rejects.toThrow("Network Error");
         });
     });
 });
