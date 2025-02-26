@@ -255,6 +255,10 @@ export const ScrtConnector = {
             fieldValues.flowName = params.flowName; 
         }
 
+        if(params.flowDevName) {
+            fieldValues.flowDevName = params.flowDevName; 
+        }
+
         voiceCallId = params.voiceCallId ? params.voiceCallId : voiceCallId;
 
         if(params.dialedNumber) {

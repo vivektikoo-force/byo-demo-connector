@@ -24,6 +24,7 @@ export default {
         INTERNAL_CALL_STARTED: "INTERNAL_CALL_STARTED",
         CALL_DESTROYED: "CALL_DESTROYED",
         MUTE: "MUTE",
-        UNMUTE: "UNMUTE"
+        UNMUTE: "UNMUTE",
+        MERGE: "MERGE"
     }
 };

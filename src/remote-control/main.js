@@ -78,19 +78,30 @@ const conferenceButton = document.getElementById('conference');
 const removeSupervisorButton = document.getElementById('remove-supervisor');
 const softphoneLogoutButton = document.getElementById('softphone-logout');
 const transcriptionVendorCallKey = document.getElementById('transcription-vendor-call-key');
+const consultTranscriptionVendorCallKey = document.getElementById('consult-transcription-vendor-call-key');
 const transcriptionCustomerPhoneNumber = document.getElementById('transcription-customer-phone-number');
 const externalUserIdTextBox = document.getElementById('transcription-external-user-id');
+const consultExternalUserIdTextBox = document.getElementById('consult-transcription-external-user-id');
 const transcriptionTextArea = document.getElementById('transcription-text-view');
+const consultTranscriptionTextArea = document.getElementById('consult-transcription-text-view');
 const sendTranscriptionButton = document.getElementById('send-transcription');
+const consultSendTranscriptionButton = document.getElementById('consult-send-transcription');
 const recordButton = document.getElementById('record-button');
 const senderTypeButton = document.getElementById('sender-types');
 const senderTypeDropdownButton = document.getElementById('sender-types-title');
 const senderTypeDropdown = document.getElementById('sender-types-options');
+const consultSenderTypeButton = document.getElementById('consult-sender-types');
+const consultSenderTypeDropdownButton = document.getElementById('consult-sender-types-title');
+const consultSenderTypeDropdown = document.getElementById('consult-sender-types-options');
 const endUserDropdownButton = document.getElementById('endUserButton');
 const virtualAgentDropdownButton = document.getElementById('virtualAgentButton');
 const humanAgentDropdownButton = document.getElementById('humanAgentButton');
 const externalUserDropdownButton = document.getElementById('externalUserButton');
 const supervisorDropdownButton = document.getElementById('supervisorButton');
+const consultVirtualAgentDropdownButton = document.getElementById('consult-virtualAgentButton');
+const consultHumanAgentDropdownButton = document.getElementById('consult-humanAgentButton');
+const consultExternalUserDropdownButton = document.getElementById('consult-externalUserButton');
+const consultSupervisorDropdownButton = document.getElementById('consult-supervisorButton');
 const sendPostCallRecordingButton = document.getElementById('send-post-call-recording');
 const sendVoiceMailButton = document.getElementById('send-voice-mail');
 const postCallRecordingUrl = document.getElementById('recording-link');
@@ -154,6 +165,8 @@ const isHidSupported = document.getElementById('isHidSupported');
 const hasSetExternalMicrophoneDeviceSetting = document.getElementById('hasSetExternalMicrophoneDeviceSetting');
 const hasSetExternalSpeakerDeviceSetting = document.getElementById('hasSetExternalSpeakerDeviceSetting');
 signedRecordingDetails.style.display = "none";
+const consultTranscriptArticle = document.getElementById('consult-transcription-article');
+
 
 function getCallId(i) {
     return document.getElementById(`button-group${i}`).getAttribute(`data-call-id`);
@@ -199,7 +212,7 @@ function setContactTypes() {
 function getRemovingParticipantSettings(callType) {
     if (callType === Constants.CALL_TYPE.ADD_PARTICIPANT) {
         return allowRemovingTransferCallParticipantDropdown.value;
-    } 
+    }
     return allowRemovingPrimaryCallParticipantDropdown.value;
 }
 function getCallInfo(callType) {
@@ -311,9 +324,9 @@ function handleAgentWorkNotification(agentWorkData) {
 }
 
 function sendMessageToConnector(payload) {
-    socket.emit("message", { fromUsername: remoteControlIdentifier, 
-                            toUsername : agentToControlRemotely ,
-                            data: payload  });
+    socket.emit("message", { fromUsername: remoteControlIdentifier,
+        toUsername : agentToControlRemotely ,
+        data: payload  });
 }
 
 function handleMessageFromConnector(event) {
@@ -332,7 +345,7 @@ function handleMessageFromConnector(event) {
                 const hideNotification = (notification) => {
                     setTimeout(() => {
                         notification.classList.add('slds-hide');
-                    }, 5000); 
+                    }, 5000);
                 };
 
                 if (agentWork.status === 'accepted') {
@@ -347,9 +360,9 @@ function handleMessageFromConnector(event) {
                         },
                         body: JSON.stringify({ workItemId: agentWork.workItemId}),
                     }).then(response => response.json())
-                    .then(data => {
-                      console.log(`Clear agent work cache returned with - ${data.success}`);
-                    }).catch((err) => {
+                        .then(data => {
+                            console.log(`Clear agent work cache returned with - ${data.success}`);
+                        }).catch((err) => {
                         console.log(`Clear agent work cache failed - ${err}`);
                     });
                     console.log("Agent Work Declined");
@@ -357,15 +370,16 @@ function handleMessageFromConnector(event) {
                     hideNotification(declinedNotification);
                 }
             }
-            break;
+                break;
             case Constants.SHOW_LOGIN_PAGE: {
                 showLoginPageCheckbox.checked = event.data.value;
             }
-            break;
+                break;
             case Constants.NEW_TYPE:
-            break;
+                break;
             case Constants.AGENT_CONFIG: {
                 demoTitle.innerText = `Connected to ${event.data.referrer} as ${event.data.agentId}`;
+                document.title = `SCV Simulator ${event.data.agentId}`;
                 agentName.innerText = `Agent (${event.data.agentId})`;
                 multipartyAllowedCheckbox.checked = event.data.isMultipartyAllowed;
                 consultAllowedCheckbox.checked = event.data.isConsultAllowed;
@@ -384,14 +398,14 @@ function handleMessageFromConnector(event) {
                     const supportsMessaging = contactCenterChannels.includes('messaging');
 
                     const mode = (supportsPhone && supportsMessaging) ? 'VOICE_AND_MESSAGING' :
-                                  supportsPhone ? 'VOICE_ONLY' :
-                                  supportsMessaging ? 'MESSAGING_ONLY' :
-                                  'NONE';
+                        supportsPhone ? 'VOICE_ONLY' :
+                            supportsMessaging ? 'MESSAGING_ONLY' :
+                                'NONE';
 
                     setDemoConnectorMode(mode);
                 }
             }
-            break;
+                break;
             case Constants.CAPABILITIES: {
                 demoTitle.innerText = `Connected to ${event.data.referrer} as ${event.data.agentId}`;
                 agentName.innerText = `Agent (${event.data.agentId})`;
@@ -419,19 +433,19 @@ function handleMessageFromConnector(event) {
                 isHidSupported.checked = event.data.value.isHidSupported;
                 toggleSignedRecordingUrlElements();
             }
-            break;
+                break;
             case Constants.MESSAGE: {
-                 receiveMessageTextArea.value =  JSON.stringify(event.data.payload);
+                receiveMessageTextArea.value =  JSON.stringify(event.data.payload);
             }
-            break;
+                break;
             case Constants.ACTIVE_CALLS: {
-                 prettyPrintCalls(event.data.value);
+                prettyPrintCalls(event.data.value);
             }
-            break;
+                break;
             case Constants.ERROR: {
-                 showError(event.data.error);
+                showError(event.data.error);
             }
-            break;
+                break;
         }
     }
 }
@@ -480,6 +494,7 @@ function showError(error) {
 
 function prettyPrintCalls(activeCalls) {
     const isMultipartyAllowed = document.getElementById('isMultipartyAllowed').checked;
+    let isConsultCallPresent = false;
     activeCallsCard.style.display = "none";
     for (let i = 0; i <= MAX_PARTICIPANTS_INDEX; i++) {
         document.getElementById(`active-calls-text${i}`).style.display = "none";
@@ -494,7 +509,7 @@ function prettyPrintCalls(activeCalls) {
     connectSupervisorButton.style.display = "none";
     removeSupervisorButton.style.display = "none";
     swapButton.style.display = isMultipartyAllowed ? 'none' : 'block';
-    
+
     if (Array.isArray(activeCalls) && activeCalls.length > 0){
         if (hasSupervisorListenInCheckbox.checked) {
             connectSupervisorButton.style.display = "block";
@@ -505,13 +520,20 @@ function prettyPrintCalls(activeCalls) {
         activeCallsCard.style.display = "block";
         acceptCallButton.disabled = softphoneRadio.checked;
         declineCallButton.disabled = softphoneRadio.checked;
-        addParticipantButton.disabled = activeCalls.length === MAX_PARTICIPANTS_INDEX; 
+        addParticipantButton.disabled = activeCalls.length === MAX_PARTICIPANTS_INDEX;
         activeCalls.forEach((call,i) => {
+            if (call.callAttributes.isConsultCall && !consultButton.disabled) {
+                isConsultCallPresent = true;
+            }
             document.getElementById(`active-calls-header${i}`).style.display = "block";
             document.getElementById(`button-group${i}`).style.display = "block";
             document.getElementById(`active-calls-header${i}`).innerHTML = `Call Participant&nbsp;${(call.contact && call.contact.name) || call.phoneNumber}&nbsp;</span>(${call.callAttributes.participantType}${call.callAttributes.isConsultCall ? ' - Consult Call' : ''}</span>)&nbsp;<span style="color:green;float:right;border-style:groove;}">&nbsp;${call.state}`;
             document.getElementById(`button-group${i}`).setAttribute(`data-call-id`, call.callId);
-            
+            if (call.callAttributes.isConsultCall) {
+                document.getElementById(`connect-participant${i}`).addEventListener('click', function() {
+                    connectCall();
+                });
+            }
             const elem = document.getElementById(`active-calls-text${i}`)
             elem.style.display = "block";
             elem.value = `Call #${i} ${call.state} to ${call.callAttributes.participantType}:\n`;
@@ -523,6 +545,11 @@ function prettyPrintCalls(activeCalls) {
         let audioStats = JSON.parse(mosElem.value);
         audioStats.callId = activeCalls[0].callId;
         mosElem.value = JSON.stringify(audioStats, undefined, 4);
+    }
+    if (isConsultCallPresent) {
+        consultTranscriptArticle.classList.remove('slds-hide');
+    } else {
+        consultTranscriptArticle.classList.add('slds-hide');
     }
 }
 activeCallsCard.style.display = "none";
@@ -539,19 +566,19 @@ function connectToConnector() {
         clearInterval(getActiveCallsIntervalID);
     }
     getActiveCallsIntervalID = setInterval(updateActiveCalls, 3000);
-    
+
     sendMessageToConnector({
         type: Constants.GET_SHOW_LOGIN_PAGE
     });
-    
+
     sendMessageToConnector({
         type: Constants.GET_AGENT_CONFIG
     });
-    
+
     sendMessageToConnector({
         type: Constants.GET_CAPABILITIES
     });
-    
+
     window.addEventListener('mouseup', function(){
         showError("");
         setTimeout(updateActiveCalls, 200);
@@ -607,8 +634,14 @@ supervisorDropdownButton.addEventListener('click', supervisorClicked);
 virtualAgentDropdownButton.addEventListener('click', virtualAgentClicked);
 humanAgentDropdownButton.addEventListener('click', humanAgentClicked);
 externalUserDropdownButton.addEventListener('click', externalUserClicked);
+consultSupervisorDropdownButton.addEventListener('click', consultSupervisorClicked);
+consultVirtualAgentDropdownButton.addEventListener('click', consultVirtualAgentClicked);
+consultHumanAgentDropdownButton.addEventListener('click', consultHumanAgentClicked);
+consultExternalUserDropdownButton.addEventListener('click', consultExternalUserClicked);
 transcriptionTextArea.addEventListener('input', onTranscriptionChanged);
+consultTranscriptionTextArea.addEventListener('input', onConsultTranscriptionChanged);
 sendTranscriptionButton.addEventListener('click', sendTranscription);
+consultSendTranscriptionButton.addEventListener('click', consultSendTranscription);
 sendPostCallRecordingButton.addEventListener('click', sendPostCallRecording);
 sendVoiceMailButton.addEventListener('click', sendVoiceMail);
 sendMessageButton.addEventListener('click', sendMessage);
@@ -616,6 +649,7 @@ sendRealtimeConversationEventsButton.addEventListener('click', sendRealtimeConve
 connectSupervisorButton.addEventListener('click', connectSupervisor);
 removeSupervisorButton.addEventListener('click', removeSupervisor);
 senderTypeButton.addEventListener('click', showSenderTypeOptions);
+consultSenderTypeButton.addEventListener('click', showConsultSenderTypeOptions);
 addParticipantButton.addEventListener('click', addParticipant);
 requestCallbackButton.addEventListener('click', requestCallback);
 pushDialerButton.addEventListener('click', pushDialer);
@@ -681,7 +715,7 @@ function setAgentConfig() {
 }
 
 //This function is used to show/hide unifiedRoutingFlowParms
-//When Unified Routing is enabled, then we will show Flow Input Parameters 
+//When Unified Routing is enabled, then we will show Flow Input Parameters
 function setRoutingConfig() {
     if(federatedRoutingRadio.checked) {
         unifiedRoutingFlowParamsDiv.classList.add('slds-hide');
@@ -786,21 +820,21 @@ function connectCall() {
 
 function customerHangup() {
     sendMessageToConnector({
-        type: Constants.REMOVE_PARTICIPANT, 
+        type: Constants.REMOVE_PARTICIPANT,
         participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER
     });
 }
 
 function acceptCall() {
     sendMessageToConnector({
-        type: Constants.CONNECT_CALL, 
+        type: Constants.CONNECT_CALL,
         callInfo: getCallInfo(Constants.CALL_TYPE.INBOUND)
     });
 }
 
 function declineCall() {
     sendMessageToConnector({
-        type: Constants.AGENT_HANGUP, 
+        type: Constants.AGENT_HANGUP,
         reason: Constants.HANGUP_REASON.PHONE_CALL_ERROR,
         agentErrorStatus: Constants.AGENT_ERROR_STATUS.DECLINED_BY_AGENT
 
@@ -809,7 +843,7 @@ function declineCall() {
 
 function agentMissedCall() {
     sendMessageToConnector({
-        type: Constants.AGENT_HANGUP, 
+        type: Constants.AGENT_HANGUP,
         reason: Constants.HANGUP_REASON.PHONE_CALL_ERROR,
         agentErrorStatus: Constants.AGENT_ERROR_STATUS.MISSED_BY_AGENT
 
@@ -818,7 +852,7 @@ function agentMissedCall() {
 
 function callError() {
     sendMessageToConnector({
-        type: Constants.AGENT_HANGUP, 
+        type: Constants.AGENT_HANGUP,
         reason: Constants.HANGUP_REASON.PHONE_CALL_ERROR,
         agentErrorStatus: "AnyVendorError"
     });
@@ -1007,15 +1041,15 @@ function recordClicked() {
         const transcript = event.results[0][0].transcript;
         transcriptionTextArea.value = transcript;
       }
-      
+
       recognition.onspeechend = () => {
         recordButton.disabled = false;
       }
-      
+
       recognition.onnomatch = () => {
         recordButton.disabled = false;
       }
-      
+
       recognition.onerror = () => {
         recordButton.disabled = false;
       }
@@ -1027,8 +1061,16 @@ function onTranscriptionChanged() {
     recordButton.disabled = transcriptionTextArea.value;
 }
 
+function onConsultTranscriptionChanged() {
+    recordButton.disabled = consultTranscriptionTextArea.value;
+}
+
 function showSenderTypeOptions() {
     senderTypeDropdown.classList.toggle('slds-is-open');
+}
+
+function showConsultSenderTypeOptions() {
+    consultSenderTypeDropdown.classList.toggle('slds-is-open');
 }
 
 function endUserClicked() {
@@ -1061,6 +1103,30 @@ function humanAgentClicked() {
     senderTypeDropdown.classList.toggle('slds-is-open');
 }
 
+function consultSupervisorClicked() {
+    senderType = Constants.SENDER_TYPE.SUPERVISOR;
+    consultSenderTypeDropdownButton.innerText = 'Supervisor';
+    consultSenderTypeDropdown.classList.toggle('slds-is-open');
+}
+
+function consultVirtualAgentClicked() {
+    senderType = Constants.SENDER_TYPE.VIRTUAL_AGENT;
+    consultSenderTypeDropdownButton.innerText = 'Unknown agent';
+    consultSenderTypeDropdown.classList.toggle('slds-is-open');
+}
+
+function consultExternalUserClicked() {
+    senderType = Constants.SENDER_TYPE.EXTERNAL_USER;
+    consultSenderTypeDropdownButton.innerText = 'External User';
+    consultSenderTypeDropdown.classList.toggle('slds-is-open');
+}
+
+function consultHumanAgentClicked() {
+    senderType = Constants.SENDER_TYPE.HUMAN_AGENT;
+    consultSenderTypeDropdownButton.innerText = 'Human agent';
+    consultSenderTypeDropdown.classList.toggle('slds-is-open');
+}
+
 function showParticipantTypeOptions() {
     participantTypeDropdown.classList.toggle('slds-is-open');
 }
@@ -1086,12 +1152,12 @@ function thirdPartyEndCallClicked() {
 function endCall() {
     if (endCallParticipantType===Constants.PARTICIPANT_TYPE.AGENT) {
         sendMessageToConnector({
-            type: Constants.AGENT_HANGUP, 
+            type: Constants.AGENT_HANGUP,
             reason: Constants.HANGUP_REASON.PHONE_CALL_ENDED
         });
     } else {
         sendMessageToConnector({
-            type: Constants.END_CALL, 
+            type: Constants.END_CALL,
             participantType: endCallParticipantType
         });
     }
@@ -1119,6 +1185,31 @@ function sendTranscription() {
     });
     transcriptionTextArea.value = '';
     recordButton.disabled = false;
+}
+
+function consultSendTranscription() {
+    const content = consultTranscriptionTextArea.value;
+    const vendorCallKey = consultTranscriptionVendorCallKey.value;
+    let metaData = "";
+    if (senderType === Constants.SENDER_TYPE.END_USER) {
+        senderType = Constants.SENDER_TYPE.HUMAN_AGENT;
+    }
+    if (senderType === Constants.SENDER_TYPE.HUMAN_AGENT) {
+        metaData = agentToControlRemotely;
+    }
+    if (senderType === Constants.SENDER_TYPE.EXTERNAL_USER) {
+        metaData = consultExternalUserIdTextBox.value;
+    }
+    sendMessageToConnector({
+        type: Constants.CREATE_TRANSCRIPTION,
+        content,
+        messageId: Math.random().toString(36).substring(10),
+        senderType,
+        phoneNumber,
+        vendorCallKey,
+        metaData
+    });
+    consultTranscriptionTextArea.value = '';
 }
 
 function sendPostCallRecording() {
@@ -1200,7 +1291,7 @@ function sendRealtimeConversationEvents(){
         }
     } catch(e) {
         console.error(e); // error in the above string
-    }    
+    }
 }
 
 function sendAudioStats() {
@@ -1318,7 +1409,7 @@ function setDemoConnectorMode(mode) {
         voiceSimulatorTabsetHead.classList.remove('slds-hide');
         voiceSimulatorTabsetHead.classList.add('slds-show');
         voiceSimulatorTabsetHead.classList.add('slds-is-active');
-       
+
         messagingSimulatorTabsetHead.classList.remove('slds-is-active');
         messagingSimulatorTabsetHead.classList.add('slds-show');
         messagingSimulatorTabsetHead.classList.remove('slds-hide');
