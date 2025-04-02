@@ -13,7 +13,8 @@ jest.mock('@salesforce/scv-connector-base', () => ({
 import fetchMock from "jest-fetch-mock";
 import constants from './testConstants';
 import { publishEvent, log, GenericResult, PhoneCall, Contact, ParticipantResult, CallInfo, CallResult, DialOptions,
-    LogoutResult, Constants, Phone, AgentStatusInfo, HangupResult, SupervisedCallInfo, PhoneCallAttributes, CustomError } from '@salesforce/scv-connector-base';
+    LogoutResult, Constants, Phone, AgentStatusInfo, HangupResult, SupervisedCallInfo, PhoneCallAttributes, CustomError,
+    HidDevice } from '@salesforce/scv-connector-base';
 import { Connector } from '../main/connector';
 
 global.console.log = jest.fn(); //do not print console.log 
@@ -938,6 +939,20 @@ describe('Vendor Sdk tests', () => {
             const selectedPhone = new Phone ({type:"DESK_PHONE", number: "111 333 0456"});
             telephonyConnector.setAgentConfig({ selectedPhone });
             expect(vendorSdk.state.agentConfig.selectedPhone).toEqual(selectedPhone);
+        });
+
+        it('setAgentConfig from sfdc with hidDevice and check for undefined', async () => {
+            navigator.hid = {
+                getDevices : jest.fn()
+            }
+            const hidDeviceInfo = new HidDevice ({productId:12345, vendorId: 12345});
+            const selectedPhone = new Phone ({type:"DESK_PHONE", number: "111 333 0456"});
+
+            telephonyConnector.setAgentConfig({ selectedPhone });
+            expect(vendorSdk.state.agentConfig.hidDeviceInfo).toEqual(undefined);
+
+            telephonyConnector.setAgentConfig({ selectedPhone, hidDeviceInfo });
+            expect(vendorSdk.state.agentConfig.hidDeviceInfo).toEqual(hidDeviceInfo);
         });
 
         it('setAgentConfig from sfdc when phone type is not changed and just number is updated', async () => {

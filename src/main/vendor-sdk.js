@@ -263,8 +263,12 @@ export class Sdk {
     }
 
     setAgentConfig(config) {
-        this.state.agentConfig.selectedPhone = config.selectedPhone;
-        this.state.agentConfig.hidDeviceInfo = config.hidDeviceInfo;
+        if (config.selectedPhone) {
+            this.state.agentConfig.selectedPhone = config.selectedPhone;
+        }
+        if (config.hidDeviceInfo) {
+            this.state.agentConfig.hidDeviceInfo = config.hidDeviceInfo;
+        }
         localStorage.setItem('agentConfig', JSON.stringify(this.state.agentConfig));
         return this.executeAsync("setAgentConfig", new SetAgentConfigResult({
             success: true
