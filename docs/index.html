@@ -43,20 +43,40 @@
 
 
     <section>
-        <article><h1>Service Cloud Voice demo connector</h1>
-<p>The demo connector is a sample application for partner telephony systems that integrate with Salesforce Service Cloud Voice. It demonstrates an optimal Voice implementation based on a group of telephony API mocks. It also includes a voice call simulation tool that you can use to test call actions such as making and answering calls and using phone controls.</p>
+        <article><h1>Salesforce CCaaS Voice/Messaging Demo</h1>
+<p>The demo app is a sample application for both &quot;Partner Telephony Systems&quot; that integrate with Salesforce Service Cloud Voice and &quot;BYO OTT&quot; that integrates with Salesforce Service Cloud Messaging (Inbound/Outbound).</p>
+<ul>
+<li>The &quot;Partner Telephony Systems&quot; application demonstrates an optimal Voice implementation based on a group of telephony API mocks. It also includes a voice call simulation tool that you can use to test call actions such as making and answering calls and using phone controls.</li>
+<li>For &quot;BYO OTT&quot; application helps you test the features of inbound/outbound messaging and attachment for inbound messages after your custom channel messaging configuration is done. It also allows you to customize the settings of &quot;Conversation Channel Definition API Name&quot;, &quot;Conversation Address Identifier&quot;, &quot;End User Client Identifier&quot;, and &quot;Custom Event Payload Field&quot; to test different custom channels, conversations, and end users.</li>
+</ul>
 <h2>Document</h2>
-<p>We’ve provided documentation in the <a href="https://github.com/salesforce/demo-scv-connector/tree/master/docs"><code>/docs/</code></a> folder.</p>
+<p>We’ve provided documentation for Salesforce Service Cloud Voice connector APIs in the <a href="https://github.com/salesforce/byo-demo-connector/tree/master/docs"><code>/docs/</code></a> folder.</p>
 <h2>Installation</h2>
 <h3>Environment setup</h3>
 <p>The developer environment requires <a href="https://nodejs.org/en/download/">Node</a>, <a href="https://docs.npmjs.com/cli/install">NPM</a> and <a href="https://webpack.github.io/docs/webpack-dev-server.html">webpack-dev-server</a>.</p>
 <h3>Installation</h3>
 <h4>Clone this repo</h4>
+<pre class="prettyprint source"><code>$ git clone https://github.com/salesforce-misc/byo-demo-connector.git
+</code></pre>
 <h4>Install npm dependencies</h4>
-<pre class="prettyprint source"><code>$ npm install
+<pre class="prettyprint source"><code>$ cd byo-demo-connector
+$ npm install
 </code></pre>
 <h3>Config Setup</h3>
-<p>Open config.env and set following config values as per Org and Enviroment if needed.</p>
+<pre class="prettyprint source"><code>$ cp config.env .env
+</code></pre>
+<h4>Setup &quot;Partner Telephony Systems&quot; application</h4>
+<p>Open .env and set following config values as per Org and Environment if needed.</p>
+<pre class="prettyprint source"><code>################## env vars for remote-control (Voice)
+#Server app will listen on this port. Only change if you want to use other port.
+SERVER_PORT=3030
+#Server Url. Only change if you want to use other port.
+SERVER_URL=http://localhost:3030
+#Contact Center Phone No. Only Change if you want to use any other Contact Center Number
+CALL_CENTER_NO=4150000000
+#Only use if you want to bypass SCRT and use your own VoiceCallId for inbound call
+#OVERRIDE_VOICECALLID=0LQxx0000004C92GAE
+</code></pre>
 <ul>
 <li>
 <p>OVERRIDE_VOICECALLID (Optional): If you want to bypass scrt2 to create a voiceCall, pass a voiceCallId, i.e. 0LQxx0000004CIiGAM</p>
@@ -78,13 +98,75 @@
 <p>To avoid the warning message from the browser, you can setup a self-signed SSL certificate for you local web server.</p>
 </li>
 </ul>
+<h4>Setup &quot;BYO OTT&quot; application</h4>
+<p>Open .env and replace all placeholder vars marked inside &lt;&gt; accordingly shown as below:</p>
+<pre class="prettyprint source"><code>################# env vars for ottApp (Messaging)
+SF_CONSUMER_KEY=&quot;&lt;connected app consumer key>&quot;
+SF_PRIVATE_KEY=&quot;&lt;private key>&quot;
+SF_AUDIENCE=https://login.salesforce.com [^1]
+SF_SUBJECT=&lt;admin user name>[^9]
+SF_AUTH_ENDPOINT=https://login.salesforce.com/services/oauth2/token [^2]
+SF_PUB_SUB_ENDPOINT=api.pubsub.salesforce.com:7443 [^3]
+SF_PUB_SUB_EVENT_RECEIVE_LIMIT=100
+SF_INSTANCE_URL=&lt;Salesforce core app instance url> [^4][^9]
+SF_SCRT_INSTANCE_URL=&lt;Salesforce core app scrt2 instance url> [^5][^9]
+SF_ORG_ID=&lt;orgId>[^9]
+SF_AUTHORIZATION_CONTEXT=&lt;ConversationChannelDefinition API Name>[^9]
+CHANNEL_ADDRESS_IDENTIFIER=&lt;Channel address identifier> [^6]
+END_USER_CLIENT_IDENTIFIER=&lt;End user client identifier>
+PORT=3000
+IS_OTT=true[^8]
+API_VERSION=&lt;Ex: &quot;63.0&quot; API version for the current release of salesforce app>[^10]
+SF_PASSWORD=&lt;admin user password>[^11]
+</code></pre>
+<h4>Setup &quot;BYO CCaaS&quot; application for messaging</h4>
+<p>Complete Setup &quot;BYO OTT&quot; application step above, update <code>IS_OTT</code> to <code>false</code>. Then replace all placeholder vars marked inside &lt;&gt; accordingly shown as below:</p>
+<pre class="prettyprint source"><code>################# extra env vars for CCaaS (Messaging)
+USER_ID=&lt;Valid salesforce or external user id>[^9]
+ROUTING_OWNER=&lt;Owner of Routing possible values Partner|Salesforce>[^9]
+CAPACITY_WEIGHT=&lt;Capacity weight which will be used in agent work example value:1>[^9]
+AUTO_CREATE_AGENT_WORK=&lt;true or false>[^7][^9]
+</code></pre>
+<p><strong>Note</strong>:</p>
+<ul>
+<li>[^1] The audience url for different environments:
+<ul>
+<li>Salesforce internal dev instance: <code>https://login.test1.pc-rnd.salesforce.com</code></li>
+<li>Sandbox instance: <code>https://test.salesforce.com</code></li>
+<li>Prod instance: <code>https://login.salesforce.com</code></li>
+</ul>
+</li>
+<li>[^2] The auth endpoint for different environments:
+<ul>
+<li>Salesforce internal dev instance: <code>https://login.test1.pc-rnd.salesforce.com/services/oauth2/token</code></li>
+<li>Sandbox instance: <code>https://test.salesforce.com/services/oauth2/token</code></li>
+<li>Prod instance: <code>https://login.salesforce.com/services/oauth2/token</code></li>
+</ul>
+</li>
+<li>[^3] The Pub/Sub endpoint for different environments:
+<ul>
+<li>Salesforce internal dev instance: <code>api.stage.pubsub.salesforce.com:7443</code></li>
+<li>Sandbox instance: <code>api.pubsub.salesforce.com:7443</code></li>
+<li>Prod instance: <code>api.pubsub.salesforce.com:7443</code></li>
+</ul>
+</li>
+<li>[^4] The value of &lt;Salesforce core app instance url&gt; above is an url with the pattern of &quot;https://&lt;your org my domain name&gt;.my.salesforce.com&quot;.</li>
+<li>[^5] The value of &lt;Salesforce core app scrt2 instance url&gt; above is an url with the pattern of &quot;https://&lt;your org my domain name&gt;.my.salesforce-scrt.com&quot;.</li>
+<li>[^6] The value of &lt;Channel address identifier&gt; above is the value from field &quot;ChannelAddressIdentifier&quot; in corresponding MessagingChannel record.</li>
+<li>[^7] Auto create agent work boolean flag is used to specify if agent work should be created automatically when sending inbound messages.</li>
+<li>[^8] Specify if it's an OTT only, applying to the circumstance of no contact center</li>
+<li>[^9] No need to specify if you choose IS_OTT=false</li>
+<li>[^10] The API version for the current release of salesforce app. This should be specified in the format &quot;XX.0&quot;, where XX is the version number. For example, &quot;62.0&quot;.</li>
+<li>[^11] The admin password for the Salesforce instance. Ensure this is securely stored and not exposed in public repositories.</li>
+</ul>
 <h3>Launch application</h3>
 <pre class="prettyprint source"><code>$ npm start
 </code></pre>
 <p>By default the web server will run in SSL on port 8080.</p>
 <p>Now that your web server is running, you can point your Service Cloud Voice Call Center Adapter URL to the web server URL (i.e. https://example.com:8080)</p>
-<h3>Voice call simulation tool</h3>
-<p>This application also provides a voice call simulation tool that you can use to test call actions such as making and answering calls and using phone controls. When the app is running you can find it by going to this URL {your web server URL}/remote (i.e. https://example.com:8080/remote). You can use this URL to verify the installation succeed.</p>
+<h3>Launch CCaaS Voice/Messaging Demo app</h3>
+<p>When the app is running you can find it by going to this URL {your web server URL}/ccaas (i.e. https://localhost:8080/ccaas). You can use this URL to verify the installation succeed.</p>
+<p>This application provides both voice call simulation tool that you can use to test call actions such as making and answering calls and using phone controls, and BYO OTT testing tool that you can use to test inbound/outbound messaging. These two parts are organized in two tabs: &quot;Voice&quot; and &quot;Message&quot;.</p>
 <h2>Testing</h2>
 <p>Lint all the source code and run all the unit tests:</p>
 <pre class="prettyprint source"><code>$ npm test
@@ -95,6 +177,8 @@
 <p>To bundle the source code in the src/ folder into one minified connector_min.js file:</p>
 <pre class="prettyprint source"><code>$ gulp bundle --mode prod
 </code></pre>
+<h2>Note about using the telephony integration service</h2>
+<p>Certain features (e.g. voice call transcripts) depend on the telephony integration service to work. In order for the demo connector to be able to authenticate with it, you need to set the private key in <code>src/server/private.key</code> to match the public key that you created your call center with. If you don't want to create a new key pair you can use the one in <code>src/server/cert.pem</code></p>
 <h2>Contributing and Developing Locally</h2>
 <p>We welcome contributors into our repo. Please read the <a href="https://github.com/salesforce/demo-scv-connector/blob/master/CONTRIBUTING.md">contributing guidelines</a> for more information.</p></article>
     </section>
@@ -107,13 +191,13 @@
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-connector.html">connector</a></li><li><a href="module-vendor-sdk.html">vendor-sdk</a></li></ul><h3>Classes</h3><ul><li><a href="module-connector.Connector.html">Connector</a></li><li><a href="module-vendor-sdk.Sdk.html">Sdk</a></li><li><a href="module-vendor-sdk-Call.html">Call</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-connector.html">connector</a></li><li><a href="module-vendor-sdk.html">vendor-sdk</a></li></ul><h3>Classes</h3><ul><li><a href="module-connector.Connector.html">Connector</a></li><li><a href="module-connector.PhoneConnector.html">PhoneConnector</a></li><li><a href="module-vendor-sdk.Sdk.html">Sdk</a></li><li><a href="module-vendor-sdk-Call.html">Call</a></li><li><a href="module-vendor-sdk-ContactCenterAdditionalSettings.html">ContactCenterAdditionalSettings</a></li></ul>
 </nav>
 
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.7</a> on Thu Feb 17 2022 13:03:59 GMT-0700 (Mountain Standard Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.11</a> on Mon Aug 18 2025 23:58:43 GMT+0300 (Israel Daylight Time)
 </footer>
 
 <script> prettyPrint(); </script>

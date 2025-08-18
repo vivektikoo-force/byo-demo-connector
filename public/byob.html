@@ -1,0 +1,259 @@
+<!--  uncomment for use in visualforce page <apex:page
+  docType="html-5.0"
+  applyHtmlTag="false"
+  applyBodyTag="false"
+  showHeader="false"
+  sidebar="false"
+  standardStylesheets="false"
+  title="Unused Title"> -->
+<!-- 
+    Copyright (c) 2021, salesforce.com, inc.
+    All rights reserved.
+    SPDX-License-Identifier: BSD-3-Clause
+    For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+-->
+<html>
+
+<head>
+  <link rel="stylesheet" type="text/css" href="assets/slds-stylesheet.css" media="screen">
+  </link>
+  <link rel="stylesheet" type="text/css" href="assets/ottapp.css" media="screen">
+  </link>
+  <link rel="icon" href="data:;base64,=">
+  <title>BYOB Demo App</title>
+</head>
+
+<body>
+
+<div class="slds-grid slds-gutters demo-app-body">
+  <div
+          class="slds-col slds-m-top_large slds-m-bottom_xx-large slds-m-left_x-large slds-m-right-small demo-app-setup-panel">
+
+    <div class="slds-text-longform slds-m-top_medium">
+      <h3 class="slds-text-heading_large slds-truncate">BYOB Message Demo</h3>
+      <p class="slds-text-body_regular demo-app-desc">Welcome to the demo page, designed to help you test
+        the "Bring Your Own Bot" feature.</p>
+    </div>
+
+    <div class="slds-m-top_small slds-m-left_xx-small slds-m-right_xx-small slds-p-bottom_small"
+         style="max-width:780px;">
+      <article class="slds-card">
+        <div
+                class="slds-col slds-p-top_small slds-m-bottom_x-small slds-m-left_small slds-m-right_medium demo-app-messaging-panel">
+
+          <article class="slds-card">
+            <article class="slds-card">
+              <div class="slds-card__header slds-grid slds-border_bottom slds-p-bottom_small">
+                <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                  <div class="slds-media__figure">
+                      <span class="slds-icon_container slds-icon-standard-messaging-conversation" title="Conversation">
+                        <svg class="slds-icon slds-icon_small" aria-hidden="true">
+                          <use xlink:href="/assets/symbols.svg#messaging_conversation"></use>
+                        </svg>
+                        <span class="slds-assistive-text">Conversation</span>
+                      </span>
+                  </div>
+                  <div class="slds-media__body">
+                    <h2 class="slds-card__header-title">
+                      <span>Conversation</span>
+                    </h2>
+                  </div>
+                </header>
+              </div>
+            </article>
+            <section role="log" class="slds-chat">
+              <ul id="chatList" style="border: solid 1px lightgray;"
+                  class="slds-chat-list slds-scrollable demo-app-message-list slds-c-input-color-border">
+              </ul>
+            </section>
+          </article>
+          <form id="messageForm" enctype="multipart/form-data">
+            <div class="slds-m-top_medium slds-m-bottom_medium slds-m-left_small slds-m-right_small flex-row">
+              <input type="file" id="attachment" name="attachment">
+              <!-- button class="slds-button slds-button_icon slds-button_icon-border slds-button_icon-medium" title="Attach a file">
+                  <svg class="slds-button__icon" aria-hidden="true">
+                    <use xlink:href="/assets/symbols.svg#attach"></use>
+                  </svg>
+                  <span class="slds-assistive-text">Attach a file</span>
+                </button -->
+            </div>
+            <div class="slds-p-bottom_medium slds-m-left_small slds-m-right_small flex-row">
+              <div class="slds-form-element__control slds-grow demo-app-inbound-message-input">
+                <input type="text" id="message" name="message" placeholder="Type message…" class="slds-input"/>
+              </div>
+              <div class="slds-no-flex">
+                <button type="submit" id="sendButton"
+                        class="slds-button slds-button_brand slds-float_right demo-app-inbound-message-send-btn">Send
+                </button>
+              </div>
+            </div>
+          </form>
+          <div class="slds-col slds-card__body slds-card__body_inner">
+            <h2 class="slds-card__header-title">Agent Work Actions</h2>
+            <br/>
+            <div class="slds-grid slds-gutters slds-wrap">
+              <div class="slds-col slds-size_1-of-2 slds-p-bottom_small">
+                <button class="slds-button slds-button_outline-brand slds-size_1-of-1" disabled id="accept-work">Accept AgentWork</button>
+              </div>
+              <div class="slds-col slds-size_1-of-2 slds-p-bottom_small">
+                <button class="slds-button slds-button_outline-brand slds-size_1-of-1" disabled id="decline-work">Decline AgentWork</button>
+              </div>
+              <div class="slds-col slds-size_1-of-2 slds-p-bottom_small">
+                <button class="slds-button slds-button_outline-brand slds-size_1-of-1" disabled id="close-work">Close AgentWork</button>
+              </div>
+              <div class="slds-col slds-size_1-of-2 slds-p-bottom_small">
+                <button class="slds-button slds-button_outline-brand slds-size_1-of-1" disabled id="transfer-agent">Transfer To Agent</button>
+              </div>              
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slds-card demo-app123">
+        <article class="slds-card">
+          <div class="slds-card__header slds-grid slds-border_bottom slds-p-bottom_small">
+            <header class="slds-media slds-media_center slds-has-flexi-truncate">
+              <div class="slds-media__figure">
+                  <span class="slds-icon_container slds-icon-standard-events" title="Event Log">
+                    <svg class="slds-icon slds-icon_small" aria-hidden="true">
+                      <use xlink:href="/assets/symbols.svg#events"></use>
+                    </svg>
+                    <span class="slds-assistive-text">Event Log</span>
+                  </span>
+              </div>
+              <div class="slds-media__body">
+                <h2 class="slds-card__header-title">
+                  <span>Event Log</span>
+                </h2>
+              </div>
+            </header>
+          </div>
+          <div class="slds-card__body slds-card__body_inner slds-p-bottom--small">
+              <textarea id="eventLog" disabled="" placeholder="Response body"
+                        class="slds-textarea event-log"></textarea>
+          </div>
+        </article>
+        <!-- Settings -->
+        <article class="slds-card">
+          <div class="demo-app-setup-msg-banner" id="demo-app-setup-msg-banner">
+            <div class="slds-scoped-notification slds-media slds-media_center slds-theme_success demo-app-setup-msg"
+                 role="status">
+              <div class="slds-media__figure">
+                  <span class="slds-icon_container slds-icon-utility-success" title="success">
+                    <svg class="slds-icon slds-icon_small" aria-hidden="true">
+                      <use xlink:href="/assets/symbols.svg#success"></use>
+                    </svg>
+                    <span class="slds-assistive-text">success</span>
+                  </span>
+              </div>
+              <div class="slds-media__body">
+                <p>Success! Your settings have been updated.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div
+                  class="slds-p-top_x-large slds-p-left_xx-small slds-p-right_small slds-p-bottom_x-large demo-app-setup-form">
+            <article class="slds-card">
+              <div class="slds-card__header slds-grid slds-p-bottom_small">
+                <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                  <div class="slds-media__figure">
+                      <span class="slds-icon_container slds-icon-standard-settings" title="Settings">
+                        <svg class="slds-icon slds-icon_small" aria-hidden="true">
+                          <use xlink:href="/assets/symbols.svg#settings"></use>
+                        </svg>
+                        <span class="slds-assistive-text">Settings</span>
+                      </span>
+                  </div>
+                  <div class="slds-media__body">
+                    <h2 class="slds-card__header-title">
+                      <span>Settings</span>
+                    </h2>
+                  </div>
+                </header>
+              </div>
+            </article>
+
+            <form id="settingsForm">
+              <div class="slds-form slds-p-left_small">
+                <div class="slds-form-element slds-form-element_stacked">
+                  <label class="slds-form-element__label slds-truncate"
+                         for="authorizationContext">ExtConvParticipantIntegDef API Name:</label>
+                  <div class="slds-form-element__control">
+                    <input type="text" id="authorizationContext" name="authorizationContext"
+                           placeholder="Type ExtConvParticipantIntegDef API Name…" class="slds-input" readonly/>
+                  </div>
+                </div>
+                <div class="slds-form-element slds-form-element_stacked">
+                  <label class="slds-form-element__label slds-truncate" for="conversationIdentifier">Conversation
+                    Identifier:</label>
+                  <div class="slds-form-element__control">
+                    <input type="text" id="conversationIdentifier" name="conversationIdentifier"
+                           placeholder="Type Conversation Identifier…" class="slds-input" readonly/>
+                  </div>
+                </div>
+                <div class="slds-form-element slds-form-element_stacked">
+                  <label class="slds-form-element__label slds-truncate" for="externalBotIdentifier">External Bot
+                    Identifier:</label>
+                  <div class="slds-form-element__control">
+                    <input type="text" id="externalBotIdentifier" name="externalBotIdentifier"
+                           placeholder="Type External Bot Identifier…" class="slds-input" readonly/>
+                  </div>
+                </div>
+                <div class="slds-form-element slds-form-element_stacked">
+                  <label class="slds-form-element__label slds-truncate" for="customPlatformEvent">Custom Platform Event
+                    API Name:</label>
+                  <div class="slds-form-element__control">
+                    <input type="text" id="customPlatformEvent" name="customPlatformEvent"
+                           placeholder="Type Custom Platform Event Field API Name…"
+                           class="slds-input" readonly/>
+                  </div>
+                  <div class="slds-form-element slds-form-element_stacked">
+                    <label class="slds-form-element__label slds-truncate" for="customEventTypeField">Event Type Custom
+                      Field API Name:</label>
+                    <div class="slds-form-element__control">
+                      <input type="text" id="customEventTypeField" name="customEventTypeField"
+                             placeholder="Type EventType Custom Field API Name…" class="slds-input" readonly/>
+                    </div>
+                  </div>
+                  <div class="slds-form-element slds-form-element_stacked">
+                    <label class="slds-form-element__label slds-truncate" for="customEventPayloadField">Payload Custom
+                      Field API Name:</label>
+                    <div class="slds-form-element__control">
+                      <input type="text" id="customEventPayloadField" name="customEventPayloadField"
+                             placeholder="Type Payload Custom Field API Name…" class="slds-input" readonly/>
+                    </div>
+                  </div>
+                  <div class="slds-form-element slds-form-element_stacked">
+                    <label class="slds-form-element__label slds-truncate" for="queueId">Queue Id: </label>
+                    <div class="slds-form-element__control">
+                      <input type="text" id="queueId" name="queueId"
+                             placeholder="Type Queue Id…" class="slds-input" readonly/>
+                    </div>
+                  </div>                        
+                  <div class="slds-form-element slds-form-element_stacked">
+                    <div class="slds-form-element__control">
+                      <div class="slds-p-top_small slds-p-bottom_small">
+                        <button type="submit" class="slds-button slds-button_brand slds-float_right" disabled>Update</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        </article>
+      </article>
+    </div>
+  </div>
+</div>
+<script src="https://unpkg.com/axios@0.27.2/dist/axios.min.js"
+        integrity="sha384-vmbbJNC6Li6w5GzrydJ5cd4ttMcLJ/Nl5xgp5saZ5QV8fp7zdsrFDcCasGqOFlaC"
+        crossorigin="anonymous"></script>
+<!-- uncomment and replace with line below for use in visualforce page <script src="{!$Resource.byo-ott-app}"></script> -->
+<script src="/assets/byob.bundle.js"></script>
+</body>
+
+</html>
+<!-- uncomment for use in visualforce page</apex:page>  -->

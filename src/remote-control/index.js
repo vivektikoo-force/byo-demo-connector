@@ -242,6 +242,27 @@ export function  initializeRemoteController(connector) {
                         await connector.sdk.updateAudioStats(event.data.audioStats);
                     }
                     break;
+                    case Constants.CTR_SYNC: {
+                        try {
+                            const result = await connector.sdk.ctrSync(event.data.voiceCallId);
+                            connector.sdk.messageUser(event.fromUsername, 
+                                                      Constants.CTR_SYNC_RESULT, 
+                                                      {
+                                                        type: Constants.CTR_SYNC_RESULT,
+                                                        success: result.success,
+                                                        message: result.message
+                                                      });
+                        } catch (error) {
+                            connector.sdk.messageUser(event.fromUsername, 
+                                                      Constants.CTR_SYNC_RESULT, 
+                                                      {
+                                                        type: Constants.CTR_SYNC_RESULT,
+                                                        success: false,
+                                                        message: error.message
+                                                      });
+                        }
+                    }
+                    break;
                     case Constants.REMOVE_TRANSFER_PARTICIPANT_VARIANT: {
                         connector.sdk.updateRemoveTransferCallParticipantVariant(event.data.variant);
                     }

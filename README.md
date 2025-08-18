@@ -6,7 +6,7 @@ The demo app is a sample application for both "Partner Telephony Systems" that i
 - For "BYO OTT" application helps you test the features of inbound/outbound messaging and attachment for inbound messages after your custom channel messaging configuration is done. It also allows you to customize the settings of "Conversation Channel Definition API Name", "Conversation Address Identifier", "End User Client Identifier", and "Custom Event Payload Field" to test different custom channels, conversations, and end users.
 
 ## Document
-We’ve provided documentation for Salesforce Service Cloud Voice connector APIs in the [`/docs/`](https://github.com/salesforce/demo-scv-connector/tree/master/docs) folder.
+We’ve provided documentation for Salesforce Service Cloud Voice connector APIs in the [`/docs/`](https://github.com/salesforce/byo-demo-connector/tree/master/docs) folder.
 
 ## Installation
 ### Environment setup

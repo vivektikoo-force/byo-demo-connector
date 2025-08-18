@@ -32,35 +32,27 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-
 /** 
  * Salesforce Service Cloud Voice Demo Connector
  * @author dlouvton
  */
 
 /** @module connector **/
-import { Constants, VendorConnector } from 'scv-connector-base';
+import { Constants, VendorConnector, TelephonyConnector } from '@salesforce/scv-connector-base';
 import { Sdk } from './vendor-sdk';
+
 /** 
- * Class representing a Service Cloud Voice Demo Connector
+ * Class representing a Service Cloud Voice Demo Telephony Connector
  */
-export class Connector extends VendorConnector {
+export class PhoneConnector extends TelephonyConnector {
     /**
-     * Create a Connector instance.
+     * Create a Telephony Connector instance.
      * @param {object} sdk - Telephony SDK
      */
-    constructor(state) {
+    constructor(sdk) {
         super();
-        this.sdk = new Sdk(state);
+        this.sdk = sdk;
     }
-    /**
-     * Called by SFDC to initialize the connector
-     * @param {object} callCenterConfig - SFDC Contact Center Settings
-     */
-    init(callCenterConfig) {
-        return this.sdk.init(callCenterConfig);
-    }
-
     /**
      * Called when the connector is loaded, to request the active calls
      */
@@ -93,15 +85,17 @@ export class Connector extends VendorConnector {
     }
     /**
      * Called when call is muted from the sfdc call controls
+     * @param {PhoneCall} call
      */
-    mute() {
-        return this.sdk.mute();
+    mute(call) {
+        return this.sdk.mute(call);
     }
     /**
      * Called when call is unmuted from the sfdc call controls
+     * @param {PhoneCall} call
      */
-    unmute() {
-        return this.sdk.unmute()
+    unmute(call) {
+        return this.sdk.unmute(call)
     }
     /**
      * Called when customer/third party call is put on hold by the agent
@@ -148,20 +142,12 @@ export class Connector extends VendorConnector {
         return this.sdk.conference(calls);
     }
     /**
-     * Called when agent sets their status/presence (i.e. when changing from
-     * Available to Offline) 
-     * @param {string} agentStatus agent status, Constants.AGENT_STATUS.ONLINE or Constants.AGENT_STATUS.OFFLINE
-     * @param {AgentStatusInfo} agentStatusInfo object contains statusId, statusApiName and statusName
-     */
-    setAgentStatus(agentStatus, agentStatusInfo) {
-        return this.sdk.setAgentStatus(agentStatus, agentStatusInfo)
-    }
-    /**
      * Called when an outbound call is made 
      * @param {Contact} contact
+     * @param {DialOptions} dialOptions
      */
-    dial(contact) {
-        return this.sdk.dial(contact);
+    dial(contact, dialOptions) {
+        return this.sdk.dial(contact, {}, false, dialOptions &amp;&amp; dialOptions.isCallback, dialOptions &amp;&amp; dialOptions.isConsultCall);
     }
     /**
      * Called when an agent sends digits on the existing call @digits: a string of
@@ -182,24 +168,10 @@ export class Connector extends VendorConnector {
      * add participant to the call through either an address or a free form Phone Number.
      * @param {Contact} contact
      * @param {PhoneCall} call
+     * @param {Boolean} isBlindTransfer
      */
     addParticipant(contact, call, isBlindTransfer) {
         return this.sdk.addParticipant(contact, call, isBlindTransfer);
-    }
-    /**
-     * logout from the telephony system.
-     */
-    logout() {
-        return this.sdk.omniLogout();
-    }
-     /**
-     * Dispatch an event to Remote Control.
-     * @param {string} eventType Event Type
-     * @param {object} payload Payload
-     */
-    dispatchEventToRemote(eventType, payload) {
-        const requestBroadcastChannel = new BroadcastChannel('rc-request');
-        requestBroadcastChannel.postMessage({type: eventType, payload});
     }
     /**
      * Called when connector is ready to get the agent configuration
@@ -214,14 +186,12 @@ export class Connector extends VendorConnector {
     setAgentConfig(config) {
         return this.sdk.setAgentConfig(config);
     }
-
-    /**
-     * Called when connector is ready to get the vendor or agent capabilities
+     /**
+     * Called when connector is ready to get the voice vendor or agent capabilities
      */
-    getCapabilities() {
-        return this.sdk.getCapabilities();
+    getVoiceCapabilities() {
+        return this.sdk.getVoiceCapabilities();
     }
-    
     /**
     * Used to set the vendor or agent capabilities
     */
@@ -236,17 +206,7 @@ export class Connector extends VendorConnector {
         this.sdk.endWrapup();
     }
 
-    /**
-    * Delegate Message received from sfdc component to sdk
-    * @param {object} message - Message
-    */
-    handleMessage(message) {
-        this.sdk.handleMessage(message);
-        // dispatchEventToRemote is only for demo purposes
-        this.dispatchEventToRemote(Constants.EVENT_TYPE.MESSAGE, message);
-    }
-
-    /**
+     /**
      * Get the signed recording url
      * @param {String} recordingUrl
      * @param {String} vendorCallKey
@@ -272,6 +232,82 @@ export class Connector extends VendorConnector {
         return this.sdk.supervisorBargeIn(parentCall);
     }
 }
+
+
+/** 
+ * Class representing a Service Cloud Voice Demo Common Connector 
+ */
+export class Connector extends VendorConnector {
+    /**
+     * Create a Connector instance.
+     * @param {object} state - Vendor SDK state
+     */
+    constructor(state) {
+        super();
+        this.sdk = new Sdk(state);
+        this.telephonyConnector = new PhoneConnector(this.sdk);
+    }
+    /**
+     * Returns the Telephony Connector (if implemented)
+     */
+    getTelephonyConnector() {
+        return this.telephonyConnector;
+    }
+    /**
+     * Called by SFDC to initialize the connector
+     * @param {object} callCenterConfig - SFDC Contact Center Settings
+     */
+    init(callCenterConfig) {
+        return this.sdk.init(callCenterConfig);
+    }
+
+    /**
+     * Called when agent sets their status/presence (i.e. when changing from
+     * Available to Offline) 
+     * @param {string} agentStatus agent status, Constants.AGENT_STATUS.ONLINE or Constants.AGENT_STATUS.OFFLINE
+     * @param {AgentStatusInfo} agentStatusInfo object contains statusId, statusApiName and statusName
+     * @param {boolean} enqueueNextState true if the state should be enqueued, which will update the agent's status after a call ends
+     */
+    setAgentStatus(agentStatus, agentStatusInfo, enqueueNextState) {
+        return this.sdk.setAgentStatus(agentStatus, agentStatusInfo, enqueueNextState)
+    }
+    /**
+     * Sends non-voice agent work events to vendor such as work accepted, declined, etc
+     * @param {AgentWork} agentWork
+     * 
+     */
+    onAgentWorkEvent(agentWork) {
+        return this.sdk.onAgentWorkEvent(agentWork);
+    }
+    /**
+     * logout from the telephony system.
+     */
+    logout() {
+        return this.sdk.omniLogout();
+    }
+    
+    /**
+    * Delegate Message received from sfdc component to sdk
+    * @param {object} message - Message
+    */
+    handleMessage(message) {
+        return this.sdk.handleMessage(message);
+    }
+    /**
+     * Called when transfer is clicked in order to request the vendor to get the agent contacts
+     * @param {Object} filter
+     * @param {string} workItemId
+     */
+    getContacts(filter, workItemId) {
+        return this.sdk.getContacts(filter, workItemId);
+    }
+        /**
+     * Called when connector is ready to get the shared vendor or agent capabilities
+     */
+    getSharedCapabilities() {
+        return this.sdk.getSharedCapabilities();
+    }
+}
 </code></pre>
         </article>
     </section>
@@ -282,13 +318,13 @@ export class Connector extends VendorConnector {
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-connector.html">connector</a></li><li><a href="module-vendor-sdk.html">vendor-sdk</a></li></ul><h3>Classes</h3><ul><li><a href="module-connector.Connector.html">Connector</a></li><li><a href="module-vendor-sdk.Sdk.html">Sdk</a></li><li><a href="module-vendor-sdk-Call.html">Call</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-connector.html">connector</a></li><li><a href="module-vendor-sdk.html">vendor-sdk</a></li></ul><h3>Classes</h3><ul><li><a href="module-connector.Connector.html">Connector</a></li><li><a href="module-connector.PhoneConnector.html">PhoneConnector</a></li><li><a href="module-vendor-sdk.Sdk.html">Sdk</a></li><li><a href="module-vendor-sdk-Call.html">Call</a></li><li><a href="module-vendor-sdk-ContactCenterAdditionalSettings.html">ContactCenterAdditionalSettings</a></li></ul>
 </nav>
 
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.7</a> on Thu Feb 17 2022 13:03:59 GMT-0700 (Mountain Standard Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.11</a> on Mon Aug 18 2025 23:58:43 GMT+0300 (Israel Daylight Time)
 </footer>
 
 <script> prettyPrint(); </script>

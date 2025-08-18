@@ -49,6 +49,8 @@ const showRecordButton = document.getElementById('showRecordButton');
 const showAddCallerButton = document.getElementById('showAddCallerButton');
 const showAddBlindTransferButton = document.getElementById('showAddBlindTransferButton');
 const phoneNumberInput = document.getElementById('phoneNumber-input');
+const ctrVoiceCallIdInput = document.getElementById('ctrVoiceCallId');
+
 const startOutboundCallButton = document.getElementById('start-outbound-call');
 const startInboundCallButton = document.getElementById('new-inbound-call');
 const customerHangupButton = document.getElementById('customer-hangup');
@@ -65,6 +67,7 @@ const addParticipantButton = document.getElementById('add-participant');
 const requestCallbackButton = document.getElementById('request-callback');
 const pushDialerButton = document.getElementById('push-dialer');
 const progressiveDialerButton = document.getElementById('progressive-dialer');
+const ctrSyncButton = document.getElementById('ctr-sync');
 const consultButton = document.getElementById('consult');
 const additionalFieldsInput= document.getElementById('additionalFields-input');
 const muteButton = document.getElementById('mute');
@@ -157,7 +160,7 @@ const consultAllowedCheckbox = document.getElementById('isConsultAllowed');
 const isDialPadDisabled = document.getElementById('isDialPadDisabled');
 const isPhoneBookDisabled = document.getElementById('isPhoneBookDisabled');
 const agentCall = { callAttributes: { participantType: Constants.PARTICIPANT_TYPE.AGENT }};
-const call = { callAttributes: { participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER }};
+let call = { callAttributes: { participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER }};
 const thirdPartyCall = { callAttributes: { participantType: Constants.PARTICIPANT_TYPE.THIRD_PARTY }};
 const endCallDisabledCheckbox = document.getElementById('endCallDisabled');
 const updateSoftphoneControlsButton = document.getElementById('update-call');
@@ -446,6 +449,10 @@ function handleMessageFromConnector(event) {
                 showError(event.data.error);
             }
                 break;
+            case Constants.CTR_SYNC_RESULT: {
+                resetCtrSyncButton(event.data.success, event.data.message);
+            }
+                break;
         }
     }
 }
@@ -494,6 +501,7 @@ function showError(error) {
 
 function prettyPrintCalls(activeCalls) {
     const isMultipartyAllowed = document.getElementById('isMultipartyAllowed').checked;
+    call.callAttributes.isAutoMergeOn = document.getElementById('callIsAutoMergeOn').checked;
     let isConsultCallPresent = false;
     activeCallsCard.style.display = "none";
     for (let i = 0; i <= MAX_PARTICIPANTS_INDEX; i++) {
@@ -654,6 +662,7 @@ addParticipantButton.addEventListener('click', addParticipant);
 requestCallbackButton.addEventListener('click', requestCallback);
 pushDialerButton.addEventListener('click', pushDialer);
 progressiveDialerButton.addEventListener('click', progressiveDialer);
+ctrSyncButton.addEventListener('click', ctrSync);
 consultButton.addEventListener('click', consult);
 muteButton.addEventListener('click', mute);
 unmuteButton.addEventListener('click', unmute);
@@ -906,6 +915,47 @@ function progressiveDialer() {
         callInfo: getCallInfo(Constants.CALL_TYPE.OUTBOUND)
     });
 }
+
+function ctrSync() {
+    const voiceCallId = ctrVoiceCallIdInput.value.trim();
+    
+    if (!voiceCallId) {
+        alert('Please enter a Voice Call ID');
+        return;
+    }
+    
+    ctrSyncButton.disabled = true;
+    ctrSyncButton.textContent = 'Syncing...';
+    
+    sendMessageToConnector({
+        type: Constants.CTR_SYNC,
+        voiceCallId: voiceCallId
+    });
+}
+
+function resetCtrSyncButton(success = true) {
+    // Clear any existing timeout
+    if (window.ctrSyncTimeoutId) {
+        clearTimeout(window.ctrSyncTimeoutId);
+        window.ctrSyncTimeoutId = null;
+    }
+    
+    if (ctrSyncButton) {
+        ctrSyncButton.disabled = false;
+        ctrSyncButton.textContent = 'CTR Sync';
+        
+        // Show visual feedback
+        const originalText = ctrSyncButton.textContent;
+        ctrSyncButton.textContent = success ? 'Synced!' : 'Failed';
+        
+        setTimeout(() => {
+            ctrSyncButton.textContent = originalText;
+            ctrSyncButton.style.backgroundColor = '';
+        }, 2000);
+    }
+}
+
+
 
 function consult() {
     phoneNumber = phoneNumberInput.value;
@@ -1366,7 +1416,7 @@ function setDemoConnectorMode(mode) {
     })
 
     // connector mode only applicable for ccaas remote. 
-    if (!window.location.pathname.startsWith('/ccaas.html')) {
+    if (!window.location.pathname.startsWith('/ccaas')) {
         return false;
     }
 

@@ -28,6 +28,20 @@ export async function sendConversationAPIRequest(req, requestHeader) {
         ]
     };
 
+    let routingAttributes;
+    if (req.body.routingAttributes) {
+        try {
+            const parsed = JSON.parse(req.body.routingAttributes);
+
+            if (isValidMap(parsed)) {
+                routingAttributes = parsed;
+                jsonData["routingAttributes"] = routingAttributes;
+            }
+        } catch (e) {
+            console.error("Invalid JSON in routingAttributes:", e);
+        }
+    }
+
     jsonData = JSON.stringify(jsonData);
     console.log(getTimeStampForLoglines() + "post conversation json data: ");
     console.dir(jsonData);
@@ -48,5 +62,12 @@ export async function sendConversationAPIRequest(req, requestHeader) {
         return responseData;
     })
     return responseData;
+
+    function isValidMap(parsed) {
+        return typeof parsed === "object" &&
+            parsed !== null &&
+            !Array.isArray(parsed) &&
+            Object.keys(parsed).length > 0
+    }
 }
 

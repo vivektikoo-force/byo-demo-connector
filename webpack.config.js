@@ -50,7 +50,7 @@ module.exports = {
                 test: /\.m?js$/,
                 exclude: /(node_modules)/,
                     // Exclude the following from the exclusion
-                include: /(node_modules\/scv-connector-base)/,
+                include: /(node_modules\/@salesforce\/scv-connector-base)/,
                 enforce: 'pre',
                 use: {
                     loader: 'babel-loader',
