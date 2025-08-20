@@ -62,6 +62,49 @@ export async function getConversationChannelDefinitions() {
   }
 }
 
+export async function getExtConvParticipantIntegDef() {
+  console.log(
+      getTimeStampForLoglines() + "Start getExtConvParticipantIntegDef");
+
+  if (!API_VERSION) {
+    return null;
+  }
+
+  const developerName = SF_AUTHORIZATION_CONTEXT;
+  const accessToken = await getAccessToken();
+  console.log(getTimeStampForLoglines() + `AccessToken: ${accessToken}`);
+
+  let query;
+  query = `SELECT Id,
+                  DeveloperName,
+                  CustomPlatformEvent,
+                  CustomEventTypeField,
+                  CustomEventPayloadField,
+                  NamespacePrefix
+           FROM ExtConvParticipantIntegDef
+           WHERE DeveloperName = '${developerName}'
+           ORDER BY DeveloperName ASC`;
+
+  const requestHeader = getRequestHeader(accessToken);
+  const extConvParticipantDefQueryUrl = `${SF_INSTANCE_URL}/services/data/v${API_VERSION}/query/?q=${query}`;
+  console.log(getTimeStampForLoglines()
+      + '----- ExtConvParticipantDefQueryUrl query URL: ',
+      extConvParticipantDefQueryUrl);
+
+  try {
+    const response = await axios.get(extConvParticipantDefQueryUrl,
+        requestHeader);
+    console.log(getTimeStampForLoglines()
+        + "getExtConvParticipantIntegDef request completed successfully");
+    return response.data;
+  } catch (error) {
+    console.log(getTimeStampForLoglines()
+        + "getExtConvParticipantIntegDef request Failed: ",
+        error.response.data || error.message);
+    return null;
+  }
+}
+
 export async function getCustomMsgChannel(ccdId) {
   console.log(getTimeStampForLoglines() + "Start getCustomMsgChannel");
 
@@ -94,8 +137,4 @@ function getRequestHeader(accessToken) {
       "Content-Type": "application/json",
     }
   };
-}
-
-export function getApiVersion() {
-  return API_VERSION;
 }

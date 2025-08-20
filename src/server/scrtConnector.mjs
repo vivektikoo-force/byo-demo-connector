@@ -218,6 +218,8 @@ export const ScrtConnector = {
 
         if(params.isActiveCall === true) {
             fieldValues.isActiveCall = true;
+        } else if(params.isActiveCall != undefined) {
+            fieldValues.isActiveCall = params.isActiveCall;
         }
 
         if(params.endTime) {
@@ -236,11 +238,16 @@ export const ScrtConnector = {
                 'Telephony-Provider-Name': 'demo-connector'
             }
         };
+        
         console.log("Field Values for updating Voice call : " + JSON.stringify(fieldValues));
+        
         return voiceCallId ?
             getAxiosClient(tenantInfo).patch(`/voiceCalls/${voiceCallId}`, fieldValues, headers).then((response) => {
-                console.log("Voice Call updated : " + JSON.stringify(response.data));
+                console.log("Voice Call updated successfully : " + JSON.stringify(response.data));
                 return response;
+            }).catch((error) => {
+                console.error("Voice Call update failed:", error.message);
+                throw error;
             }) : Promise.reject('No active call');
     },
 
@@ -263,6 +270,12 @@ export const ScrtConnector = {
 
         if(params.dialedNumber) {
             fieldValues.dialedNumber = params.dialedNumber;
+        }
+
+        if(params.transferTarget) {
+            fieldValues.flowInputParameters = {
+                transferTarget: params.transferTarget
+            };
         }
 
         const headers = {

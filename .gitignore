@@ -7,3 +7,4 @@ src/.DS_Store
 .vscode
 jest-report/
 package-lock.json
+src/server/private.key

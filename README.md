@@ -6,9 +6,10 @@ The demo app is a sample application for both "Partner Telephony Systems" that i
 - For "BYO OTT" application helps you test the features of inbound/outbound messaging and attachment for inbound messages after your custom channel messaging configuration is done. It also allows you to customize the settings of "Conversation Channel Definition API Name", "Conversation Address Identifier", "End User Client Identifier", and "Custom Event Payload Field" to test different custom channels, conversations, and end users.
 
 ## Document
-We’ve provided documentation for Salesforce Service Cloud Voice connector APIs in the [`/docs/`](https://github.com/salesforce/demo-scv-connector/tree/master/docs) folder.
+We’ve provided documentation for Salesforce Service Cloud Voice connector APIs in the [`/docs/`](https://github.com/salesforce-misc/byo-demo-connector/tree/main/docs) folder.
 
 ## Installation
+
 ### Environment setup
 The developer environment requires [Node](https://nodejs.org/en/download/), [NPM](https://docs.npmjs.com/cli/install) and [webpack-dev-server](https://webpack.github.io/docs/webpack-dev-server.html). 
 
@@ -26,7 +27,6 @@ $ git clone https://github.com/salesforce-misc/byo-demo-connector.git
 $ cd byo-demo-connector
 $ npm install
 ```
-
 ### Config Setup
 
 ```
@@ -64,62 +64,85 @@ SSL certificate for local HTTPS development
 - To avoid the warning message from the browser, you can setup a self-signed SSL certificate for you local web server.
  
 #### Setup "BYO OTT" application
-Open .env and replace all placeholder vars marked inside <> accordingly shown as below:
+Copy config.env.ott to .env, and replace all placeholder vars marked inside <> accordingly shown as below:
 
 ```
-################# env vars for ottApp (Messaging)
+#########################################
+## Section #1:                         ##
+##  The entries that are not           ##
+##  dynamically fetched from core,they ##
+##  are manually set here.             ##
+#########################################
 SF_CONSUMER_KEY="<connected app consumer key>"
 SF_PRIVATE_KEY="<private key>"
 SF_AUDIENCE=https://login.salesforce.com [^1]
-SF_SUBJECT=<admin user name>[^9]
+SF_SUBJECT=<admin user name>
 SF_AUTH_ENDPOINT=https://login.salesforce.com/services/oauth2/token [^2]
 SF_PUB_SUB_ENDPOINT=api.pubsub.salesforce.com:7443 [^3]
 SF_PUB_SUB_EVENT_RECEIVE_LIMIT=100
 SF_INSTANCE_URL=<Salesforce core app instance url> [^4][^9]
 SF_SCRT_INSTANCE_URL=<Salesforce core app scrt2 instance url> [^5][^9]
 SF_ORG_ID=<orgId>[^9]
-SF_AUTHORIZATION_CONTEXT=<ConversationChannelDefinition API Name>[^9]
+SF_PASSWORD=<Admin user password> [^11]
+SF_AUTHORIZATION_CONTEXT=<ConversationChannelDefinition API Name> [^9]
 CHANNEL_ADDRESS_IDENTIFIER=<Channel address identifier> [^6]
 END_USER_CLIENT_IDENTIFIER=<End user client identifier>
-PORT=3000
-IS_OTT=true[^8]
-API_VERSION=<Ex: "63.0" API version for the current release of salesforce app>[^10]
-SF_PASSWORD=<admin user password>[^11]
+API_VERSION=<Ex: "63.0" API version for the current release of salesforce app> [^10]
 ```
 
 #### Setup "BYO CCaaS" application for messaging
-
-Complete Setup "BYO OTT" application step above, update `IS_OTT` to `false`. Then replace all placeholder vars marked inside <> accordingly shown as below:
+Copy config.env to .env, finish the section #1 configure as shown above for BYO OTT setup, then replace all placeholder vars marked inside <> accordingly for Section #2 and #3 shown as below:
 
 ```
-################# extra env vars for CCaaS (Messaging)
-USER_ID=<Valid salesforce or external user id>[^9]
+#########################################
+## Section #2:                         ##
+##  The entries that are for BYO CCaaS ##
+#########################################
+USER_ID=<Valid salesforce or external user id> [^9]
 ROUTING_OWNER=<Owner of Routing possible values Partner|Salesforce>[^9]
 CAPACITY_WEIGHT=<Capacity weight which will be used in agent work example value:1>[^9]
-AUTO_CREATE_AGENT_WORK=<true or false>[^7][^9]
+AUTO_CREATE_AGENT_WORK=true[^7][^9]
+
+############################################
+## Section #3: Indicator to specify       ##
+## whether to dynamically fetch following ##
+## entries from core:                     ##
+##   - SF_INSTANCE_URL                    ##
+##   - SF_SCRT_INSTANCE_URL               ##
+##   - SF_AUTHORIZATION_CONTEXT           ##
+##   - SF_ORG_ID                          ##
+##   - USER_ID                            ##
+##   - SF_SUBJECT                         ##
+############################################
+IS_LOCAL_CONFIG=<true: read from local env config, or false: read from core>[^8]
 ```
 
-**Note**: 
-- [^1] The audience url for different environments:
-  - Salesforce internal dev instance: `https://login.test1.pc-rnd.salesforce.com`
-  - Sandbox instance: `https://test.salesforce.com`
-  - Prod instance: `https://login.salesforce.com`
-- [^2] The auth endpoint for different environments:
-  - Salesforce internal dev instance: `https://login.test1.pc-rnd.salesforce.com/services/oauth2/token`
-  - Sandbox instance: `https://test.salesforce.com/services/oauth2/token`
-  - Prod instance: `https://login.salesforce.com/services/oauth2/token`
-- [^3] The Pub/Sub endpoint for different environments:
-  - Salesforce internal dev instance: `api.stage.pubsub.salesforce.com:7443`
-  - Sandbox instance: `api.pubsub.salesforce.com:7443`
-  - Prod instance: `api.pubsub.salesforce.com:7443`
-- [^4] The value of \<Salesforce core app instance url\> above is an url with the pattern of "https://\<your org my domain name\>.my.salesforce.com".
-- [^5] The value of \<Salesforce core app scrt2 instance url\> above is an url with the pattern of "https://\<your org my domain name\>.my.salesforce-scrt.com".
-- [^6] The value of \<Channel address identifier\> above is the value from field "ChannelAddressIdentifier" in corresponding MessagingChannel record.
-- [^7] Auto create agent work boolean flag is used to specify if agent work should be created automatically when sending inbound messages.
-- [^8] Specify if it's an OTT only, applying to the circumstance of no contact center
-- [^9] No need to specify if you choose IS_OTT=false
-- [^10] The API version for the current release of salesforce app. This should be specified in the format "XX.0", where XX is the version number. For example, "62.0".
-- [^11] The admin password for the Salesforce instance. Ensure this is securely stored and not exposed in public repositories.
+#### Setup "BYOB" application for messaging
+Copy config.env to .env, finish the section #1 configure as shown above for BYO OTT setup, then replace/update all placeholder vars marked inside <> accordingly for Section #2 and #3 shown as below:
+
+```
+#########################################
+## Section #2:                         ##
+##  The entries that are for BYOB ##
+#########################################
+SF_AUTHORIZATION_CONTEXT=<ExtConvParticipantIntegDef API Name>
+SF_AUTHORIZATION_CONTEXT_TYPE=ExternalConversationParticipant
+END_USER_CLIENT_IDENTIFIER=<Salesforce recordId of the ExternalConversationBotDef associated with the ExtConvParticipantIntegDef provided>
+QUEUE_ID=<Omni-Queue recorId associated with the routing>
+
+############################################
+## Section #3: Indicator to specify       ##
+## whether to dynamically fetch following ##
+## entries from core:                     ##
+##   - SF_INSTANCE_URL                    ##
+##   - SF_SCRT_INSTANCE_URL               ##
+##   - SF_AUTHORIZATION_CONTEXT           ##
+##   - SF_ORG_ID                          ##
+##   - USER_ID                            ##
+##   - SF_SUBJECT                         ##
+############################################
+IS_LOCAL_CONFIG=<true: read from local env config, or false: read from core>[^8]
+```
 
 ### Launch application 
  
@@ -130,11 +153,37 @@ $ npm start
 By default the web server will run in SSL on port 8080. 
 
 Now that your web server is running, you can point your Service Cloud Voice Call Center Adapter URL to the web server URL (i.e. https://example.com:8080)
+The remote control can be accessed at ccaas.html.
+
+### Replace private key
+Replace the src/server/private.key  data 
+```
+<BYO_TELEPHONY_CONNECTOR_PRIVATE_KEY>
+```
+
+with private key
+
+
+### Launch OTT Demo app
+When the app is running you can find it by going to this URL {your web server URL}/ottapp (i.e. https://localhost:8080/ottapp). You can use this URL to verify the installation succeed.
+
+This application provides BYO OTT testing tool that you can use to test inbound/outbound messaging.
 
 ### Launch CCaaS Voice/Messaging Demo app
 When the app is running you can find it by going to this URL {your web server URL}/ccaas (i.e. https://localhost:8080/ccaas). You can use this URL to verify the installation succeed.
 
 This application provides both voice call simulation tool that you can use to test call actions such as making and answering calls and using phone controls, and BYO OTT testing tool that you can use to test inbound/outbound messaging. These two parts are organized in two tabs: "Voice" and "Message".
+
+### Launch BYOB Demo app
+When the app is running you can find it by going to this URL {your web server URL}/byob (i.e. https://localhost:8080/byob). You can use this URL to verify the installation succeed.
+
+This application provides a BYOB (Bring Your Own Bot) testing tool that allows you to test messages from an external bot. When MEU sends a message, you can choose to accept or decline the bot’s agent work request. Upon accepting, you can send messages on behalf of the bot to simulate bot-meu interactions.
+
+
+**Note**:
+Sample payloads for APIs requiring json files are found here
+- [Register capabilities](/payloads/RegisterCapabilitySample.md)
+- [Conversation History API](/payloads/ConversationHistorySample.md)
 
 ## Testing
 Lint all the source code and run all the unit tests:
@@ -149,8 +198,33 @@ To bundle the source code in the src/ folder into one minified connector_min.js 
 ```
 $ gulp bundle --mode prod
 ```
+
+## Note about adding voice call recording via the ccaas demo connector UI 
+If you are testing voice call recording for BYOT, you should use this URL as the voice call recording URL in the UI: https://127.0.0.1:8080/assets/sampleaudio.mp3
+You have to use this url in order for the recording playback to work correctly
+
 ## Note about using the telephony integration service
 Certain features (e.g. voice call transcripts) depend on the telephony integration service to work. In order for the demo connector to be able to authenticate with it, you need to set the private key in `src/server/private.key` to match the public key that you created your call center with. If you don't want to create a new key pair you can use the one in `src/server/cert.pem`
 
 ## Contributing and Developing Locally
 We welcome contributors into our repo. Please read the [contributing guidelines](https://github.com/salesforce/demo-scv-connector/blob/master/CONTRIBUTING.md) for more information.
+
+
+**Note**:
+- [^1] The audience url for different environments:
+  - Sandbox instance: `https://test.salesforce.com`
+  - Prod instance: `https://login.salesforce.com`
+- [^2] The auth endpoint for different environments:
+  - Sandbox instance: `https://test.salesforce.com/services/oauth2/token`
+  - Prod instance: `https://login.salesforce.com/services/oauth2/token`
+- [^3] The Pub/Sub endpoint for different environments:
+  - Sandbox instance: `api.pubsub.salesforce.com:7443`
+  - Prod instance: `api.pubsub.salesforce.com:7443`
+- [^4] The value of \<Salesforce core app instance url\> above is an url with the pattern of "https://\<your org my domain name\>.my.salesforce.com".
+- [^5] The value of \<Salesforce core app scrt2 instance url\> above is an url with the pattern of "https://\<your org my domain name\>.my.salesforce-scrt.com".
+- [^6] The value of \<Channel address identifier\> above is the value from field "ChannelAddressIdentifier" in corresponding MessagingChannel record.
+- [^7] Auto create agent work boolean flag is used to specify if agent work should be created automatically when sending inbound messages.
+- [^8] Specify if it reads configuration from env or from core. Under the circumstance of no contact center, please select true.
+- [^9] No need to specify if you choose IS_LOCAL_CONFIG=false
+- [^10] The API version for the current release of salesforce app. This should be specified in the format "XX.0", where XX is the version number. For example, "62.0".
+- [^11] The admin password for the Salesforce instance. Ensure this is securely stored and not exposed in public repositories.

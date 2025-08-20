@@ -8,10 +8,17 @@ import messagingConstants from "./messagingConstants.mjs";
 import multer from 'multer';
 import {getEventSchema, subscribe, parseEvent, connectToPubSubApi} from './ottAppLib/sfdc-pub-sub-api.mjs';
 import {sendSFInboundMessageInteraction, sendSFInboundTypingIndicatorInteraction} from './ottAppLib/sfdc-byoc-interaction-api.mjs';
+import {sendSFConversationEntry, fetchSFConversationEntries} from './ottAppLib/sfdc-byob-conversation-entry-api.mjs';
+import {patchAgentWork} from './ottAppLib/sfdc-byocc-agentwork-api.mjs';
+import {sendPostRouteAPIRequest} from './ottAppLib/sfdc-byocc-post-route-api.mjs';
 import { sendAcknowledgement } from './ottAppLib/sfdc-byocc-acknowledgement-api.mjs';
 import {sendRunApiLabRequest} from './ottAppLib/sfdc-byocc-lab-api.mjs';
 import {getAccessToken} from './ottAppLib/sfdc-auth.mjs';
-import { getConversationChannelDefinitions, getCustomMsgChannel } from './ottAppLib/sfdc-auto-populate.mjs';
+import {
+  getConversationChannelDefinitions,
+  getCustomMsgChannel,
+  getExtConvParticipantIntegDef
+} from './ottAppLib/sfdc-auto-populate.mjs';
 import { validateCCDFieldsOnPlatformEvent, validateConversationVendorInfo, validateContactCenterChannelForCustomType, validateSCRT2PermissionsForPlatformEvent } from './ottAppLib/sfdc-health-check.mjs';
 import path from 'path';
 import cors from 'cors';
@@ -21,12 +28,12 @@ import bodyParser from 'body-parser';
 const urlencodedParser = bodyParser.urlencoded({ extended: false });
 const jsonParser = bodyParser.json();
 import { getTimeStampForLoglines } from './util.mjs';
+import { v4 as uuidv4} from 'uuid';
 
 customEnv.env();
 
 // Get config metadata from .env
 const {
-  PORT,
   SF_ORG_ID,
   CHANNEL_ADDRESS_IDENTIFIER,
   END_USER_CLIENT_IDENTIFIER,
@@ -35,7 +42,9 @@ const {
   AUTO_CREATE_AGENT_WORK,
   SF_INSTANCE_URL,
   SF_SCRT_INSTANCE_URL,
-  API_VERSION
+  API_VERSION,
+  SF_AUTHORIZATION_CONTEXT_TYPE,
+  QUEUE_ID
 } = process.env;
 
 const IS_LOCAL_CONFIG = process.env.IS_LOCAL_CONFIG === "true";
@@ -49,10 +58,12 @@ settingsCache.set("channelAddressIdentifier", CHANNEL_ADDRESS_IDENTIFIER);
 settingsCache.set("endUserClientIdentifier", END_USER_CLIENT_IDENTIFIER);
 settingsCache.set("autoCreateAgentWork", AUTO_CREATE_AGENT_WORK);
 settingsCache.set("orgId", SF_ORG_ID);
-settingsCache.set("instanceUrl", SF_INSTANCE_URL)
-settingsCache.set("scrtUrl", SF_SCRT_INSTANCE_URL)
+settingsCache.set("instanceUrl", SF_INSTANCE_URL);
+settingsCache.set("scrtUrl", SF_SCRT_INSTANCE_URL);
 settingsCache.set("userId", USER_ID);
 settingsCache.set("userName", SF_SUBJECT)
+settingsCache.set("authorizationContextType", SF_AUTHORIZATION_CONTEXT_TYPE)
+settingsCache.set("queueId", QUEUE_ID);
 
 // function to dynamically fetch conversation channel definition values and set in the settingsCache
 async function fetchAndCacheCCDValues() {
@@ -69,7 +80,9 @@ async function fetchAndCacheCCDValues() {
     //    - salesforce setup supports BYO inbound acknowledgements
     //    - salesforce setup supports BYO typing indicators
     const ccdData = await getConversationChannelDefinitions();
+    console.log(getTimeStampForLoglines() + "CCD data: ", ccdData);
     if(ccdData && ccdData.records && ccdData.records.length  > 0){
+      console.log('ccdData:', ccdData);
       const ccdDataRecord = ccdData.records[0];
       settingsCache.set("authorizationContext", ccdDataRecord.DeveloperName);
       settingsCache.set("customPlatformEvent", `/event/${ccdDataRecord.CustomPlatformEvent}`);
@@ -108,12 +121,56 @@ async function fetchAndCacheCCDValues() {
   }
 }
 
-const port = PORT || 3000;
+// function to dynamically fetch ExtConvParticipantIntegDef values and set in the settingsCache
+async function fetchAndCacheExtConvParticipantIntegDefValues() {
+  try {
+    // Set the following dynamically fetched extConvParticipantIntegDef data below to the settingsCache:
+
+    const extConvParticipantData = await getExtConvParticipantIntegDef();
+    if (extConvParticipantData && extConvParticipantData.records
+      && extConvParticipantData.records.length > 0) {
+      const extConvParticipantDataRecord = extConvParticipantData.records[0];
+      settingsCache.set("authorizationContext",
+        extConvParticipantDataRecord.DeveloperName);
+      settingsCache.set("customPlatformEvent",
+        `/event/${extConvParticipantDataRecord.CustomPlatformEvent}`);
+      settingsCache.set("customEventPayloadField",
+        extConvParticipantDataRecord.CustomEventPayloadField);
+      settingsCache.set("customEventTypeField",
+        extConvParticipantDataRecord.CustomEventTypeField);
+
+      if (extConvParticipantDataRecord.Id) {
+        settingsCache.set("extConvParticipantId",
+          extConvParticipantDataRecord.Id);
+      }
+
+      console.log(getTimeStampForLoglines()
+        + 'ExtConvParticipantIntegDef values cached successfully');
+
+      // Calling the PubSub API after getting the ExtConvParticipantIntegDef fields and custom platform event
+      console.log(getTimeStampForLoglines() + `connectToPubSubApi() `);
+
+      let sfdcPubSubClient = await connectToPubSubApi();
+      subscribeToSfInteractionEvent(sfdcPubSubClient);
+    } else {
+      console.log(
+        getTimeStampForLoglines()
+        + "No records found in the ExtConvParticipantIntegDef data");
+    }
+  } catch (error) {
+    console.error('Error fetching ExtConvParticipantIntegDef values:', error);
+  }
+}
 
 export async function initOttApp(expressApp) {
 
   expressApp.use(cors());
-  fetchAndCacheCCDValues();
+
+  if (settingsCache.get("authorizationContextType") === "ExternalConversationParticipant") {
+    await fetchAndCacheExtConvParticipantIntegDefValues();
+  } else {
+    await fetchAndCacheCCDValues();
+  }
 
   // Init upload dir
   const upload = multer({ dest: 'uploads/' });
@@ -136,6 +193,36 @@ export async function initOttApp(expressApp) {
   expressApp.post('/sendmessage', upload.single('attachment'), (req, res) => {
       const responseData = handleSendmessage(req);
       res.json(responseData); 
+  });
+
+  // Register sendConversationEntry endpoint
+  expressApp.post('/sendConversationEntry', upload.single('attachment'), (req, res) => {
+    console.log(getTimeStampForLoglines() + 'sendConversationEntry API call');
+
+    const responseData = handleSendConversationEntry(req);
+    res.json(responseData);
+  });
+
+  // Register sendConversationEntry endpoint
+  expressApp.get('/fetchConversationEntries', (req, res) => {
+    console.log(getTimeStampForLoglines() + 'getConversationEntries API call');
+
+    const responseData = handleFetchConversationEntries(req);
+    res.json(responseData);
+  });
+
+  // Register patchAgentWork endpoint
+  expressApp.patch('/patchAgentWork', (req, res) => {
+    console.log(getTimeStampForLoglines() + 'patchAgentWork API call');
+    console.log(JSON.stringify(req.body));
+
+    const responseData = handlePatchAgentWork(req);
+    res.json(responseData);
+  });
+
+  expressApp.post('/routeConversationToAgent', jsonParser, (req, res) => {  
+    const responseData = handleRouteConversationToAgent(req);
+    res.json(responseData);
   });
 
   // Register apiLab endpoint
@@ -174,6 +261,7 @@ export async function initOttApp(expressApp) {
             // fields value from UI
             "apiName": req.body.apiName,
             "conversationIdentifier": req.body.conversationIdentifier,
+            "cancelReason":req.body.cancelReason
           }
           break;
         case 'POST_ROUTING_RESULT':
@@ -181,6 +269,7 @@ export async function initOttApp(expressApp) {
             // fields value from UI
             "apiName": req.body.apiName,
             "conversationIdentifier": req.body.conversationIdentifier,
+            "routingType": req.body.routingType,
             "workItemId":req.body.workItemId,
             "success": req.body.success,
             "externallyRouted": req.body.externallyRouted,
@@ -239,7 +328,8 @@ export async function initOttApp(expressApp) {
             // fields value from UI
             "apiName": req.body.apiName,
             "endUserClientIdentifier": req.body.endUserClientIdentifier,
-            "channelAddressIdentifier": req.body.channelAddressIdentifier
+            "channelAddressIdentifier": req.body.channelAddressIdentifier,
+            "routingAttributes": req.body.routingAttributes
           }
           break;
       }
@@ -272,6 +362,7 @@ export async function initOttApp(expressApp) {
   expressApp.post('/sendsettings', jsonParser, (req, res) => {
     console.log(getTimeStampForLoglines() + "/sendsettings request:", req);
     settingsCache.set("authorizationContext", req.body.authorizationContext);
+    settingsCache.set("authorizationContextType", req.body.authorizationContextType);
     settingsCache.set("channelAddressIdentifier", req.body.channelAddressIdentifier);
     settingsCache.set("endUserClientIdentifier", req.body.endUserClientIdentifier);
     settingsCache.set("customEventPayloadField", req.body.customEventPayloadField);
@@ -292,6 +383,18 @@ export async function initOttApp(expressApp) {
     } catch (error) {
       console.error('Error fetching ConversationChannelDefinitions:', error);
       res.status(500).json({ error: 'Failed to fetch ConversationChannelDefinitions' });
+    }
+  });
+
+  // Register ExtConvParticipantIntegDef endpoint
+  expressApp.get('/getExtConvParticipantIntegDef', async (req, res) => {
+    try {
+      console.log(getTimeStampForLoglines() + "/getExtConvParticipantIntegDef request:", req);
+      const extConvParticipantIntegDefData = await getExtConvParticipantIntegDef();
+      res.json(extConvParticipantIntegDefData);
+    } catch (error) {
+      console.error('Error fetching ExtConvParticipantIntegDef:', error);
+      res.status(500).json({ error: 'Failed to fetch ExtConvParticipantIntegDef' });
     }
   });
 
@@ -349,6 +452,7 @@ export async function initOttApp(expressApp) {
       customEventTypeField: settingsCache.get("customEventTypeField"),
       autoCreateAgentWork : AUTO_CREATE_AGENT_WORK,
       userId : settingsCache.get("userId"),
+      queueId : settingsCache.get("queueId")      
     };
 
     let authorizationContext = settingsCache.get("authorizationContext");
@@ -359,7 +463,7 @@ export async function initOttApp(expressApp) {
     let customEventTypeField = settingsCache.get("customEventTypeField");
     let autoCreateAgentWork = settingsCache.get("autoCreateAgentWork");
     let userId = settingsCache.get("userId");
-
+    let queueId = settingsCache.get("queueId");
     if (authorizationContext) {
       responseData.authorizationContext = authorizationContext;
     }
@@ -384,7 +488,9 @@ export async function initOttApp(expressApp) {
     if (userId){
       responseData.userId = userId;
     }
-    
+    if (queueId){
+      responseData.queueId = queueId;
+    }      
     res.json(responseData);
   });
   //register endpoint to get IS_LOCAL_CONFIG
@@ -393,6 +499,7 @@ export async function initOttApp(expressApp) {
   });
 
   expressApp.get('/replyMessage', (req, res) => {
+    console.log("===== /replyMessage call");
     if (sendMessageTimeoutId) {
       clearTimeout(sendMessageTimeoutId);
     }
@@ -488,6 +595,12 @@ function handleSendmessage(req) {
 
   // return and warn if non-ott doesn't have all the critical data
   if (!IS_LOCAL_CONFIG && !(settingsCache.get("orgId") && settingsCache.get("authorizationContext") && settingsCache.get("channelAddressIdentifier") && settingsCache.get("endUserClientIdentifier") && settingsCache.get("scrtUrl"))) {
+    console.log('Missing critical data:');
+    console.log('orgId:', settingsCache.get("orgId"));
+    console.log('authorizationContext:', settingsCache.get("authorizationContext")); 
+    console.log('channelAddressIdentifier:', settingsCache.get("channelAddressIdentifier"));
+    console.log('endUserClientIdentifier:', settingsCache.get("endUserClientIdentifier"));
+    console.log('scrtUrl:', settingsCache.get("scrtUrl"));
     console.log(getTimeStampForLoglines() + "[Warn] Please check if the user is in a Contact Center, and refresh your (1) Salesforce App and then (2)demo connector page to retrieve critical contact center data to start sending messages.");
     return responseData;
   }
@@ -497,6 +610,64 @@ function handleSendmessage(req) {
   } else if (interactionType === 'EntryInteraction' && entryType === 'TypingStartedIndicator') {
     responseData = sendSFInboundTypingIndicatorInteraction(settingsCache.get("orgId"), settingsCache.get("authorizationContext"), settingsCache.get("channelAddressIdentifier"), settingsCache.get("endUserClientIdentifier"), entryType);
   }
+  return responseData
+}
+
+// Event handler
+function handleSendConversationEntry(req) {
+  let responseData = {};
+
+  // return and warn if non-ott doesn't have all the critical data
+  console.log(settingsCache.get("orgId"), settingsCache.get("authorizationContext"), settingsCache.get("conversationIdentifier"), settingsCache.get("scrtUrl"));
+  /* if (!IS_LOCAL_CONFIG && !(settingsCache.get("orgId") && settingsCache.get("authorizationContext") && settingsCache.get("conversationIdentifier") && settingsCache.get("scrtUrl"))) {
+    console.log(getTimeStampForLoglines() + "[Warn] Please check if the user is in a Contact Center, and refresh your (1) Salesforce App and then (2)demo connector page to retrieve critical contact center data to start sending messages.");
+    return responseData;
+  } */
+  responseData = sendSFConversationEntry(settingsCache.get("orgId"), settingsCache.get("authorizationContext"), settingsCache.get("authorizationContextType"), settingsCache.get("conversationIdentifier"), settingsCache.get("endUserClientIdentifier"), req);
+  return responseData;
+}
+
+// Event handler
+function handleFetchConversationEntries(req) {
+  let responseData = {};
+
+  // return and warn if non-ott doesn't have all the critical data
+  console.log(settingsCache.get("orgId"), settingsCache.get("authorizationContext"), settingsCache.get("conversationIdentifier"), settingsCache.get("scrtUrl"));
+  if (!IS_LOCAL_CONFIG && !(settingsCache.get("orgId") && settingsCache.get("authorizationContext") && settingsCache.get("conversationIdentifier") && settingsCache.get("scrtUrl"))) {
+    console.log(getTimeStampForLoglines() + "[Warn] Please check if the user is in a Contact Center, and refresh your (1) Salesforce App and then (2)demo connector page to retrieve critical contact center data to start sending messages.");
+    return responseData;
+  }
+  responseData = fetchSFConversationEntries(settingsCache.get("orgId"), settingsCache.get("authorizationContext"), settingsCache.get("authorizationContextType"), settingsCache.get("conversationIdentifier"), settingsCache.get("endUserClientIdentifier"), req);
+  return responseData;
+}
+
+// Event handler for patchAgentWork Request
+function handlePatchAgentWork(req) {
+  let responseData = {};
+
+  responseData = patchAgentWork(settingsCache.get("orgId"), settingsCache.get("authorizationContext"), settingsCache.get("authorizationContextType"), req);
+  return responseData;
+}
+
+// Event handler for transferToAgent Request
+async function handleRouteConversationToAgent(req) {
+  let responseData = {};
+  const accessToken = await getAccessToken();
+
+  const requestHeader = {
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "Accept": "*/*",
+      "OrgId": settingsCache.get("orgId"),
+      "AuthorizationContext": settingsCache.get("authorizationContext"),
+      "AuthorizationContextType": "ExternalConversationParticipant",
+      "RequestId": uuidv4()
+    }
+  };
+
+  responseData = await sendPostRouteAPIRequest(req, requestHeader);
+  console.log(getTimeStampForLoglines() + 'responseData: ' + JSON.stringify(responseData));
   return responseData;
 }
 
@@ -528,19 +699,25 @@ async function subscribeToSfInteractionEvent(sfdcPubSubClient) {
 
           // #1: retrieve event type
           let eventTypeField = getFieldValue(event, settingsCache.get("customEventTypeField"));
+          let eventType = (eventTypeField && eventTypeField.string) ? eventTypeField.string: 'null';
+
           let customEventTypeFieldFromSettings = settingsCache.get("customEventTypeField");
-          console.log(getTimeStampForLoglines() + 'customEventTypeField / customEventTypeFieldFromSettings: ', ((eventTypeField && eventTypeField.string) ? eventTypeField.string: 'null'), customEventTypeFieldFromSettings);
+          console.log(getTimeStampForLoglines() + 'customEventTypeField / customEventTypeFieldFromSettings: ', eventType, customEventTypeFieldFromSettings);
 
           let channelAddressIdFieldVal = null;
           let payloadFieldObj = null;
           let recipientFieldValObj = null;
           let payloadField = null;
           let conversationEntryId = null;
+          let entryType = null;
+          let conversationIdentifier = null;
+          let outerPayloadFieldObj = null;
+          const ROUTING_WORK_RESULT_ENTRY_TYPE = "RoutingWorkResult";
 
-          if (eventTypeField && eventTypeField.string) {
+          if (eventType) {
             console.log(getTimeStampForLoglines() + 'customEventType found in received platform event ========');
 
-            if (eventTypeField.string === messagingConstants.EVENT_TYPE.INTERACTION || eventTypeField.string === messagingConstants.EVENT_TYPE.ROUTING_REQUESTED) {
+            if (eventType === messagingConstants.EVENT_TYPE.INTERACTION || eventType === messagingConstants.EVENT_TYPE.ROUTING_REQUESTED) {
               // #1: retrieve event payload
               payloadField = getFieldValue(event, settingsCache.get("customEventPayloadField"));
               console.log(getTimeStampForLoglines() + 'payloadField: ', payloadField);
@@ -549,7 +726,7 @@ async function subscribeToSfInteractionEvent(sfdcPubSubClient) {
               }
               let payloadFieldVal = payloadField.string;
               console.log(getTimeStampForLoglines() + 'payloadFieldVal: ', payloadFieldVal);
-              let outerPayloadFieldObj = JSON.parse(payloadFieldVal);
+              outerPayloadFieldObj = JSON.parse(payloadFieldVal);
               payloadFieldObj = getFieldValue(outerPayloadFieldObj, 'payload');
               console.log(getTimeStampForLoglines() + 'messagePayload: ', payloadFieldObj);
 
@@ -568,12 +745,11 @@ async function subscribeToSfInteractionEvent(sfdcPubSubClient) {
               // #4: conversationEntry id
               conversationEntryId = getFieldValue(outerPayloadFieldObj.payload, 'identifier');
             } else {
-              console.log(getTimeStampForLoglines() + 'Event type not supported: ', eventTypeField.string);
+              console.log(getTimeStampForLoglines() + 'Event type not supported: ', eventType);
               return;
             }
           }
 
-          let type = eventTypeField.string;
           let channelAddressIdFromSettings = settingsCache.get("channelAddressIdentifier");
           console.log(getTimeStampForLoglines() + 'channelAddressIdField / channelAddressIdFromSettings: ', channelAddressIdFieldVal, channelAddressIdFromSettings);
 
@@ -587,36 +763,75 @@ async function subscribeToSfInteractionEvent(sfdcPubSubClient) {
           console.log(getTimeStampForLoglines() + 'recipientUserName: ', recipientUserName);
           let endUserClientIdentifierFromSettings = settingsCache.get("endUserClientIdentifier");
          
-          if (!recipientUserName || recipientUserName !== endUserClientIdentifierFromSettings) {
+          if (!recipientUserName || recipientUserName.substring(0,15) !== endUserClientIdentifierFromSettings.substring(0,15)) {
             return;
           }
           let replyObjStr;
-          if (eventTypeField.string === messagingConstants.EVENT_TYPE.INTERACTION){
-            let messageType = getFieldValue(payloadFieldObj, 'messageType');
+          
+          switch (eventType) {
+            case messagingConstants.EVENT_TYPE.INTERACTION:
 
-            // Handling according to the messageType
-            switch (messageType) {
-              case 'ChoicesMessage': 
-                replyObjStr = handleChoiceMessage(type, messageType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj);
-                break;
-              case 'FormMessage':
-                // TODO: Handle Form Message Type
-                break;
-              default:
-                replyObjStr = handleStaticContentMessage(type, messageType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj);
-                break;
-            }
-          } else if (eventTypeField.string == messagingConstants.EVENT_TYPE.ROUTING_REQUESTED){
+              let entryType = getFieldValue(payloadFieldObj, 'entryType');
 
-            // Push stringfied reply obj
-            console.log(getTimeStampForLoglines() + 'sending object for routeingRequested event: ', payloadField);
-            replyObjStr = JSON.stringify({
-              type,
-              channelAddressIdFieldVal,
-              recipientUserName,
-              payloadField
-            });
+              // set conversationIdentifier as per the event
+              conversationIdentifier = getFieldValue(outerPayloadFieldObj, 'conversationIdentifier');
+              settingsCache.set("conversationIdentifier", conversationIdentifier);
+
+              switch (entryType) {
+                case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.ROUTING_WORK_RESULT: 
+                  // Push reply obj
+                  replyObjStr = JSON.stringify({
+                    type: eventType,
+                    channelAddressIdFieldVal,
+                    recipientUserName,
+                    payloadField
+                  });
+                  break;
+                case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.MESSAGE:
+                  let messageType = getFieldValue(payloadFieldObj, 'messageType');
+                  // Handling according to the messageType
+                  switch (messageType) {
+                    case messagingConstants.EVENT_PAYLOAD_MESSAGE_TYPE.CHOICES_MESSAGE: 
+                      replyObjStr = handleChoiceMessage(eventType, messageType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj);
+                      break;
+                    case messagingConstants.EVENT_PAYLOAD_MESSAGE_TYPE.FORM_MESSAGE:
+                      // TODO: Handle Form Message Type
+                      break;
+                    case messagingConstants.EVENT_PAYLOAD_MESSAGE_TYPE.STATIC_CONTENT_MESSAGE:
+                      replyObjStr = handleStaticContentMessage(eventType, messageType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj);
+                      break;
+                    default:
+                      console.log(getTimeStampForLoglines() + 'Message type not supported: ', messageType);
+                      break;
+                  }
+                  break;
+                case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.PROGRESS_INDICATOR:
+                case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.TYPING_STARTED_INDICATOR:
+                case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.TYPING_STOPPED_INDICATOR:
+                  replyObjStr = handleIndicatorMessage(eventType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj);
+                  break;
+                default:
+                  console.log(getTimeStampForLoglines() + 'Entry type not supported: ', entryType);
+                  return;
+              }
+     
+              break;
+            case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.ROUTING_REQUESTED:
+              // Push stringfied reply obj
+              console.log(getTimeStampForLoglines() + 'sending object for routeingRequested event: ', payloadField);
+              replyObjStr = JSON.stringify({
+                eventType,
+                channelAddressIdFieldVal,
+                recipientUserName,
+                payloadField
+              });
+              break;
+            default:
+              console.log(getTimeStampForLoglines() + 'Event type not supported: ', eventType);
+              return;
           }
+
+
           console.log(getTimeStampForLoglines() + 'Event processing done');
 
           repliedMessages.push(replyObjStr);
@@ -626,9 +841,6 @@ async function subscribeToSfInteractionEvent(sfdcPubSubClient) {
             throw Error('no conversation identifier found in cache! Cannot proceed acknowledgement request');
           }
 
-          let conversationId = settingsCache.get("conversationIdentifier");
-          console.log(getTimeStampForLoglines() + 'Conversation Identifier From Cache: ' + settingsCache.get("conversationIdentifier"));
-
           if (conversationEntryId === null) {
             throw Error('no conversationEntry identifier found in event! Cannot proceed acknowledgement request');
           }
@@ -636,9 +848,9 @@ async function subscribeToSfInteractionEvent(sfdcPubSubClient) {
 
           console.log(getTimeStampForLoglines() + 'Sending acknowledgement API post request...');
 
-          // Acceptable Acknowledgement Type: {"Read", "Delivered"}, by default, we send a 'Read' acknowledgement for every message received. 
-          let responseData = await sendAcknowledgement(conversationId, conversationEntryId, "Read");
-          console.log(getTimeStampForLoglines() + 'Acknowledgement API response received. ' + JSON.stringify(responseData));
+          // Acceptable Acknowledgement Type: {"Read", "Delivered"}, by default, we send a 'Read' acknowledgement for every message received.
+          //let responseData = await sendAcknowledgement(conversationId, conversationEntryId, "Read");
+          //console.log(getTimeStampForLoglines() + 'Acknowledgement API response received. ' + JSON.stringify(responseData));
         });
       } else {
         // If there are no events then every 270 seconds the system will keep publishing the latestReplayId.
@@ -702,7 +914,7 @@ function getFieldValue(payload, fieldName) {
   }
 }
 
-function handleStaticContentMessage(type, messageType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj) {
+function handleStaticContentMessage(eventType, messageType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj) {
   let replyMessageText = getFieldValue(payloadFieldObj, 'text');
   console.log(getTimeStampForLoglines() + 'replyMessageText: ', replyMessageText);
 
@@ -729,7 +941,7 @@ function handleStaticContentMessage(type, messageType, channelAddressIdFieldVal,
   }
 
   return JSON.stringify({
-    type,
+    eventType,
     messageType,
     channelAddressIdFieldVal,
     replyMessageText,
@@ -744,7 +956,30 @@ function handleStaticContentMessage(type, messageType, channelAddressIdFieldVal,
 
 }
 
-function handleChoiceMessage(type, messageType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj) {
+
+/**
+ * Handles indicator messages (typing indicators, progress indicators) from Salesforce
+ * @param {string} eventType - The type of event (e.g., 'INTERACTION')
+ * @param {string} channelAddressIdFieldVal - The channel address identifier
+ * @param {string} recipientUserName - The recipient's username
+ * @param {object} payloadField - The payload field from the event
+ * @param {object} payloadFieldObj - The parsed payload object
+ * @returns {string} JSON stringified response object
+ */
+function handleIndicatorMessage(eventType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj) {
+  // replyMessageText will only be used for progress indicator
+  let replyMessageText = getFieldValue(payloadFieldObj, 'text');
+  return JSON.stringify({
+    eventType,
+    channelAddressIdFieldVal,
+    replyMessageText,
+    recipientUserName,
+    payloadField
+  });
+}
+
+
+function handleChoiceMessage(eventType, messageType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj) {
   let abstractMessage = getFieldValue(payloadFieldObj, 'abstractMessage');
   if (!abstractMessage) {
     console.log(getTimeStampForLoglines() + 'Error: abstractMessage not found in payloadFieldObj');
@@ -778,7 +1013,7 @@ function handleChoiceMessage(type, messageType, channelAddressIdFieldVal, recipi
     }));
 
     return JSON.stringify({
-      type,
+      eventType,
       messageType,
       channelAddressIdFieldVal,
       formatType,
@@ -789,6 +1024,59 @@ function handleChoiceMessage(type, messageType, channelAddressIdFieldVal, recipi
       payloadField
     });
 
+  } else {
+    // TODO: Handle other format types like carousel, listpicker here
+    return JSON.stringify({
+      eventType,
+      messageType,
+      channelAddressIdFieldVal,
+      formatType,
+      choiceText,
+      optionItems,
+      buttons,
+      recipientUserName,
+      payloadField
+    });
+
+  }
+}
+
+function handleChoiceResponseMessage(type, messageType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj) {
+  let abstractMessage = getFieldValue(payloadFieldObj, 'abstractMessage');
+  if (!abstractMessage) {
+    console.log(getTimeStampForLoglines() + 'Error: abstractMessage not found in payloadFieldObj');
+    return JSON.stringify({
+      type: 'Error',
+      error: 'abstractMessage not found in payloadFieldObj'
+    });
+  }
+
+  let choiceResponse = getFieldValue(abstractMessage, 'choicesResponse');
+  
+  if (!choiceResponse) {
+    console.log(getTimeStampForLoglines() + 'Error: choice response not found in abstractMessage');
+    return JSON.stringify({
+      type: 'Error',
+      error: 'choice response not found in abstractMessage'
+    });
+  }
+
+  let formatType = getFieldValue(choiceResponse, 'formatType');
+  let selectedOptions = getFieldValue(choiceResponse, 'selectedOptions');
+
+  console.log(getTimeStampForLoglines() + 'Format Type: ', formatType);
+  console.log(getTimeStampForLoglines() + 'Selected Options: ', selectedOptions);
+
+  if (formatType === 'Selections') {
+    return JSON.stringify({
+      type,
+      messageType,
+      channelAddressIdFieldVal,
+      formatType,
+      selectedOptions,
+      recipientUserName,
+      payloadField
+    });
   } else {
     // TODO: Handle other format types like carousel, listpicker here
     return JSON.stringify({
@@ -803,5 +1091,44 @@ function handleChoiceMessage(type, messageType, channelAddressIdFieldVal, recipi
       payloadField
     });
 
+  }
+}
+
+function handleFormResponseMessage(type, messageType, channelAddressIdFieldVal, recipientUserName, payloadField, payloadFieldObj) {
+  let abstractMessage = getFieldValue(payloadFieldObj, 'abstractMessage');
+  if (!abstractMessage) {
+    console.log(getTimeStampForLoglines() + 'Error: abstractMessage not found in payloadFieldObj');
+    return JSON.stringify({
+      type: 'Error',
+      error: 'abstractMessage not found in payloadFieldObj'
+    });
+  }
+
+  let formResponse = getFieldValue(abstractMessage, 'formResponse');
+  
+  if (!formResponse) {
+    console.log(getTimeStampForLoglines() + 'Error: form response not found in abstractMessage');
+    return JSON.stringify({
+      type: 'Error',
+      error: 'form response not found in abstractMessage'
+    });
+  }
+
+  let formatType = getFieldValue(formResponse, 'formatType');
+  let resultMessage = getFieldValue(formResponse, 'resultMessage');
+
+  console.log(getTimeStampForLoglines() + 'Format Type: ', formatType);
+  console.log(getTimeStampForLoglines() + 'Form Response: ', resultMessage);
+
+  if (formatType === 'Result') {
+    return JSON.stringify({
+      type,
+      messageType,
+      channelAddressIdFieldVal,
+      formatType,
+      resultMessage,
+      recipientUserName,
+      payloadField
+    });
   }
 }
