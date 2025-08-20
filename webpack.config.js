@@ -3,11 +3,15 @@ require('custom-env').env();
 module.exports = {
     mode: 'development',
     devtool: 'source-map',
+    infrastructureLogging: {
+      level: 'warn',
+    },
     entry: {
         main: './src/main/index.js',
         remote: './src/remote-control/main.js',
         login: './src/login/index.js',
         ottapp: './src/byo-ott-app/main.js',
+        byob: './src/byob/main.js',
         ccaas: './src/remote-control/main.js'
     },
     devServer: {
@@ -37,10 +41,10 @@ module.exports = {
             index: 'app_debug.html',
             rewrites: [
                 {from: /^\/$/, to: 'app_debug.html'},
-                {from: /^\/remote/, to: 'remote.html'},
                 {from: /^\/login/, to: 'login.html'},
+                {from: /^\/ccaas/, to: 'ccaas.html'},
                 {from: /^\/ottapp/, to: 'ottapp.html'},
-                {from: /^\/ccaas/, to: 'ccaas.html'}
+                {from: /^\/byob/, to: 'byob.html'}
             ]
         }
     },
