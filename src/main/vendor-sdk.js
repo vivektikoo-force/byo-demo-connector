@@ -1623,6 +1623,7 @@ export class Sdk {
                 this.mergeConsultCall(callToMerge);
                 // change consult call participantType
                 callToMerge.callAttributes.participantType = Constants.PARTICIPANT_TYPE.THIRD_PARTY;
+                this.connectParticipant(callToMerge.callInfo, callToMerge.callType, callToMerge);
                 this.messageUser(null, USER_MESSAGE.MERGE, { consultCall: callToMerge, activeConferenceCalls: Object.values(this.state.activeCalls) });
             }
             // When call is merged and primary call is on Hold, we should resume the primary call
