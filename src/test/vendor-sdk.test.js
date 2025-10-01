@@ -1846,6 +1846,27 @@ describe('Vendor Sdk tests', () => {
 
             expect(vendorSdk.state.activeCalls["consultCallId"].state).toBe(Constants.CALL_STATE.CONNECTED);
         });
+
+        it('Should call connectParticipant when merging consult call in conference', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            vendorSdk.state.isConsultAllowed = true;
+            vendorSdk.state.capabilities.canConsult = true;
+
+            const connectParticipantSpy = jest.spyOn(vendorSdk, 'connectParticipant').mockImplementation(() => {});
+            const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
+            const call1 = startCallResult1.call;
+            const startCallResult2 = await vendorSdk.startInboundCall(dummyPhoneNumber, { participantType: constants.PARTICIPANT_TYPE.THIRD_PARTY });
+            const call2 = startCallResult2.call;
+            const contact = new Contact({ phoneNumber: '100', type: Constants.CONTACT_TYPE.AGENT});
+            const startCallResult3 = await telephonyConnector.dial(contact, { isConsultCall : true});
+            const call3 = startCallResult3.call;
+            const calls = [call3, call1, call2];
+            const result = await telephonyConnector.conference(calls);
+
+            expect(result.isCallMerged).toBeTruthy();
+            expect(connectParticipantSpy).toHaveBeenCalledWith(call3.callInfo, call3.callType, call3);
+            connectParticipantSpy.mockRestore();
+        });
     });
 
     describe('addParticipant', () => {
