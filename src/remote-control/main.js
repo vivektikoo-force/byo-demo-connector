@@ -542,6 +542,11 @@ function prettyPrintCalls(activeCalls) {
                     connectCall();
                 });
             }
+            if (i===0 && call.callAttributes.participantType === Constants.PARTICIPANT_TYPE.THIRD_PARTY) {
+                document.getElementById(`connect-participant${i}`).addEventListener('click', function() {
+                    connectParticipant(getCallId(i));
+                });
+            }
             const elem = document.getElementById(`active-calls-text${i}`)
             elem.style.display = "block";
             elem.value = `Call #${i} ${call.state} to ${call.callAttributes.participantType}:\n`;

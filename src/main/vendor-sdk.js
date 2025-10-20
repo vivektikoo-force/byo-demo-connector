@@ -1391,7 +1391,16 @@ export class Sdk {
                     if (consultCall) {
                         callObj = consultCall;
                     } else {
-                        callObj = this.getCall({callAttributes: { participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER }});
+                        try {
+                            callObj = this.getCall({ callAttributes: { participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER }});
+                        } catch (e) {
+                            try {
+                                callObj = this.getCall({ callAttributes: { participantType: Constants.PARTICIPANT_TYPE.THIRD_PARTY }});
+                            } catch (e) {
+                                this.log("processEndCall getCall error", e);
+                                return destroyedCalls;
+                            }
+                        }
                     }
                     destroyedCalls = this.hangupMultiParty(callObj, reason, agentErrorStatus);
                 }
