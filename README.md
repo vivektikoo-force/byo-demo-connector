@@ -5,6 +5,9 @@ The demo app is a sample application for both "Partner Telephony Systems" that i
 - The "Partner Telephony Systems" application demonstrates an optimal Voice implementation based on a group of telephony API mocks. It also includes a voice call simulation tool that you can use to test call actions such as making and answering calls and using phone controls.
 - For "BYO OTT" application helps you test the features of inbound/outbound messaging and attachment for inbound messages after your custom channel messaging configuration is done. It also allows you to customize the settings of "Conversation Channel Definition API Name", "Conversation Address Identifier", "End User Client Identifier", and "Custom Event Payload Field" to test different custom channels, conversations, and end users.
 
+## Support
+Use the demo connector as a reference when developing your custom integration code. Salesforce provides support for features in the demo connector, but we can’t debug or troubleshoot custom connector code.
+
 ## Document
 We’ve provided documentation for Salesforce Service Cloud Voice connector APIs in the [`/docs/`](https://github.com/salesforce-misc/byo-demo-connector/tree/main/docs) folder.
 
