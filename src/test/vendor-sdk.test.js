@@ -762,6 +762,52 @@ describe('Vendor Sdk tests', () => {
             expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.PARTICIPANT_REMOVED, payload: { call : call }});
         });
 
+        it('[Multi-party] Should hangup call, when agent is kicked', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            const message1 = {
+                fromUsername: "fromUserName",
+                messageType: constants.USER_MESSAGE.CALL_STARTED,
+                data: {
+                    phoneNumber: "100",
+                    callId: "callId1",
+                    voiceCallId: "voiceCallId1",
+                    callInfo: new CallInfo({isMuted : false}),
+                    callAttributes : {
+                        isConsultCall : false
+                    },
+                    activeConferenceCalls: [],
+                    isConsultCall : false
+                }
+            };
+            await vendorSdk.handleSocketMessage(message1);
+            const call = vendorSdk.state.activeCalls['callId1'];
+            await telephonyConnector.acceptCall(call);
+            expect(Object.keys(vendorSdk.state.activeCalls).length).toEqual(1);
+
+            // main user leaves call. They will send a message to the consult user that the call is destroyed.
+
+            const message2 = {
+                fromUsername: "fromUserName",
+                messageType: constants.USER_MESSAGE.CALL_DESTROYED,
+                data: {
+                    phoneNumber: "100",
+                    callId: "callId1",
+                    voiceCallId: "voiceCallId1",
+                    callInfo: new CallInfo({isMuted : false}),
+                    callAttributes : {
+                        isConsultCall : false
+                    },
+                    reason: "ENDED",
+                    target: 'agentId',
+                    isConsultCall : false
+                }
+            };
+            await vendorSdk.handleSocketMessage(message2);
+
+            expect(Object.keys(vendorSdk.state.activeCalls).length).toEqual(0);
+            expect(publishEvent).toBeCalledWith({ eventType: Constants.VOICE_EVENT_TYPE.HANGUP, payload: new HangupResult({ calls: [call] })});
+        });
+
         it('[Multi-party] Should not return a valid call for internal call that is destroyed by processcall by owner', async () => {
             vendorSdk.state.isMultipartyAllowed = true;
             const contact = new Contact({ id: 'dummyUser', phoneNumber: '100', type: Constants.CONTACT_TYPE.AGENT});
@@ -818,6 +864,72 @@ describe('Vendor Sdk tests', () => {
             const messageData = {callId :consultCall.callId, target: 'agentId'};
             await vendorSdk.processCallDestroyed(messageData);
             expect(Object.keys(vendorSdk.state.activeCalls).length).toEqual(2);
+        });
+
+        it('[Multi-party] [agent perspective] Should hangup consult call, when main agent leaves', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            const inbound1 = await vendorSdk.startInboundCall("102", globalDummyCallInfo);
+            const { call } = inbound1;
+            const contact1 = new Contact({ id: 'dummyUser', phoneNumber: "101" });
+            await telephonyConnector.addParticipant(contact1, call);
+
+            const contact = new Contact({ id: 'dummyUser', phoneNumber: '100', type: Constants.CONTACT_TYPE.AGENT});
+            let dialOptions = {
+                isConsultCall: true
+            };
+            const startCallResult = await telephonyConnector.dial(contact, dialOptions);
+            const consultCall = startCallResult.call;
+            expect(consultCall.callType).toBe(Constants.CALL_TYPE.CONSULT);
+            expect(Object.keys(vendorSdk.state.activeCalls).length).toEqual(3);
+
+            // consult user leaves call.
+            const messageData = {callInfo: { participantType: constants.PARTICIPANT_TYPE.AGENT }};
+            await vendorSdk.endCall(messageData);
+            expect(Object.keys(vendorSdk.state.activeCalls).length).toEqual(0);
+        });
+
+        it('[Multi-party] [Consult agent perspective] Should hangup consult call, when main agent leaves', async () => {
+            vendorSdk.state.isMultipartyAllowed = true;
+            const message1 = {
+                fromUsername: "fromUserName",
+                messageType: constants.USER_MESSAGE.CALL_STARTED,
+                data: {
+                    phoneNumber: "100",
+                    callId: "callId1",
+                    voiceCallId: "voiceCallId1",
+                    callInfo: new CallInfo({isMuted : false}),
+                    callAttributes : {
+                        isConsultCall : true
+                    },
+                    activeConferenceCalls: [],
+                    isConsultCall : true
+                }
+            };
+            await vendorSdk.handleSocketMessage(message1);
+            const consultCall = vendorSdk.state.activeCalls['callId1'];
+            await telephonyConnector.acceptCall(consultCall);
+            expect(Object.keys(vendorSdk.state.activeCalls).length).toEqual(1);
+
+            // main user leaves call. They will send a message to the consult user that the call is destroyed.
+
+            const message2 = {
+                fromUsername: "fromUserName",
+                messageType: constants.USER_MESSAGE.CALL_DESTROYED,
+                data: {
+                    phoneNumber: "100",
+                    callId: "callId1",
+                    voiceCallId: "voiceCallId1",
+                    callInfo: new CallInfo({isMuted : false}),
+                    callAttributes : {
+                        isConsultCall : true
+                    },
+                    target: 'agentId',
+                    isConsultCall : true
+                }
+            };
+            await vendorSdk.handleSocketMessage(message2);
+
+            expect(Object.keys(vendorSdk.state.activeCalls).length).toEqual(0);
         });
 
         it('[MP] Should call PARTICIPANT_CONNECTED when primary caller hangs up', async () => {
@@ -993,7 +1105,21 @@ describe('Vendor Sdk tests', () => {
             await vendorSdk.dial(contact1, { isSoftphoneCall: false });
             vendorSdk.dial(contact2, { isSoftphoneCall: false }).catch((error) => {
                 expect(error.message).toEqual("Agent is not available for an outbound call");
+                expect(error.type).toEqual(Constants.VOICE_ERROR_TYPE.AGENT_AT_MAXIMUM_CAPACITY);
             })
+        });
+        it('Should throw AGENT_NOT_INITIALIZED on dial when agentId is not set', async () => {
+            const previousAgentId = vendorSdk.state.agentId;
+            vendorSdk.state.agentId = null;
+            const contact = new Contact({ phoneNumber: '100'});
+            try {
+                await vendorSdk.dial(contact, { isSoftphoneCall: true });
+            } catch (error) {
+                expect(error.message).toEqual('Agent is not initialized');
+                expect(error.type).toEqual(Constants.VOICE_ERROR_TYPE.AGENT_NOT_INITIALIZED);
+            } finally {
+                vendorSdk.state.agentId = previousAgentId;
+            }
         });
         it('Should return a valid call result on dial from hardphone on remote', async () => {
             const contact = new Contact({ phoneNumber: '100'});
@@ -1851,7 +1977,7 @@ describe('Vendor Sdk tests', () => {
             vendorSdk.state.isMultipartyAllowed = true;
             vendorSdk.state.isConsultAllowed = true;
             vendorSdk.state.capabilities.canConsult = true;
-
+            
             const connectParticipantSpy = jest.spyOn(vendorSdk, 'connectParticipant').mockImplementation(() => {});
             const startCallResult1 = await vendorSdk.startInboundCall(dummyPhoneNumber, globalDummyCallInfo);
             const call1 = startCallResult1.call;
@@ -1862,7 +1988,7 @@ describe('Vendor Sdk tests', () => {
             const call3 = startCallResult3.call;
             const calls = [call3, call1, call2];
             const result = await telephonyConnector.conference(calls);
-
+            
             expect(result.isCallMerged).toBeTruthy();
             expect(connectParticipantSpy).toHaveBeenCalledWith(call3.callInfo, call3.callType, call3);
             connectParticipantSpy.mockRestore();
@@ -3352,6 +3478,57 @@ describe('Vendor Sdk tests', () => {
             const result = await vendorSdk.verifyCallState();
            
             expect(result.allParticipantsHungUp).toBe(false);
+        });
+    });
+
+    describe('[Non Multi-party] destroyCalls', () => {
+        const initialCallerCall = new PhoneCall({
+            callAttributes: new PhoneCallAttributes({
+                participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER
+            })
+        });
+        const thirdPartyCall = new PhoneCall({
+            callAttributes: new PhoneCallAttributes({
+                participantType: Constants.PARTICIPANT_TYPE.THIRD_PARTY
+            })
+        });
+        const supervisorCall = new PhoneCall({
+            callAttributes: new PhoneCallAttributes({
+                participantType: Constants.PARTICIPANT_TYPE.SUPERVISOR
+            })
+        });
+        beforeEach(() => {
+            vendorSdk.state.isMultipartyAllowed = false;
+            vendorSdk.state.activeCalls = {};
+        });
+
+        it('Should return initial caller call when available', () => {
+            vendorSdk.addCall(initialCallerCall);
+            const result = vendorSdk.destroyCalls(initialCallerCall);
+            expect(result).toHaveLength(1);
+            expect(result[0]).toBe(initialCallerCall);
+        });
+
+        it('Should return both calls when participantType is AGENT', () => {
+            initialCallerCall.callId = 'call1';
+            thirdPartyCall.callId = 'call2';
+            vendorSdk.addCall(initialCallerCall);
+            vendorSdk.addCall(thirdPartyCall);
+            const result = vendorSdk.destroyCalls({
+                callAttributes: {
+                    participantType: Constants.PARTICIPANT_TYPE.AGENT
+                }
+            });
+            expect(result).toHaveLength(2);
+            expect(result).toContain(initialCallerCall);
+            expect(result).toContain(thirdPartyCall);
+        });
+
+        it('Should return the call itself when participantType is SUPERVISOR', () => {
+            vendorSdk.addCall(supervisorCall);
+            const result = vendorSdk.destroyCalls(supervisorCall);
+            expect(result).toHaveLength(1);
+            expect(result[0]).toBe(supervisorCall);
         });
     });
 });

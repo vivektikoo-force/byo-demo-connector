@@ -6,6 +6,8 @@ import { sendPostRoutingResultAPIRequest } from './sfdc-byocc-post-routing-resul
 import { sendPatchRegisterCapabilitiesAPIRequest } from'./sfdc-byocc-patch-register-capabilities-api.mjs';
 import { sendConversationHistoryRequest } from './sfdc-byocc-post-conversation-history-api.mjs';
 import { sendConversationAPIRequest } from './sfdc-byocc-post-conversation-api.mjs';
+import { sendPostParticipantAPIRequest } from './sfdc-byocc-post-participant-api.mjs';
+import { sendPostMessagingSessionAPIRequest } from './sfdc-byocc-post-messaging-session-api.mjs';
 import { v4 as uuidv4} from 'uuid';
 import { agentWork } from './sfdc-byocc-agentwork-api.mjs';
 import { settingsCache } from '../ottAppServer.mjs';
@@ -85,6 +87,18 @@ export async function sendRunApiLabRequest(req) {
         console.log(getTimeStampForLoglines() + 'Sending Conversation API post request...');
         responseData = await sendConversationAPIRequest(req, requestHeader);
         console.log(getTimeStampForLoglines() + 'Conversation API post request sent.');
+        break;
+      }
+      case "POST_PARTICIPANT": {
+        console.log(getTimeStampForLoglines() + 'Sending Participant API post request...');
+        responseData = await sendPostParticipantAPIRequest(req, requestHeader);
+        console.log(getTimeStampForLoglines() + 'Participant API post request sent.');
+        break;
+      }
+      case "POST_MESSAGING_SESSION": {
+        console.log(getTimeStampForLoglines() + 'Sending Messaging Session API post request...');
+        responseData = await sendPostMessagingSessionAPIRequest(req, requestHeader);
+        console.log(getTimeStampForLoglines() + 'Messaging Session API post request sent.');
         break;
       }
     }

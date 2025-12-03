@@ -170,7 +170,7 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                         </div>
                     </div>
                 </div>
-                <!----- CCaaS demo app title & commont components - End: ------>
+                <!----- CCaaS demo app title & common components - End: ------>
                 <!------------------------------------------------------------->
 
 
@@ -1857,6 +1857,8 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                                             <option value="POST_AGENT_WORK">POST AgentWork</option>
                                             <option value="POST_CONVERSATION_HISTORY">POST Conversation History</option>
                                             <option value="POST_CONVERSATION">POST Conversation</option>
+                                            <option value="POST_PARTICIPANT">POST Participant</option>
+                                            <option value="POST_MESSAGING_SESSION">POST Messaging Session</option>
                                         </select>
                                     </div>
                                 </div>
@@ -2194,6 +2196,92 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                                         </div>
                                     </div>
                                 </div>
+                                <div id = "postParticipantAPIContainer" class="slds-hide" >
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label" for="conversationId"><abbr class="slds-required" title="required">* </abbr>Conversation Id</label>
+                                        <div class="slds-form-element__control">
+                                            <input type="text" id="conversationIdForPostParticipant" placeholder="Please enter conversation id" class="slds-input" />
+                                        </div>
+                                    </div>
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label" for="participantsPayload"><abbr class="slds-required" title="required">* </abbr> Participants</label>
+                                        <div class="slds-m-bottom_snall flex-row">
+                                            <textarea id="participantsPayload" placeholder="JSON Participants Payload..." class="slds-textarea" rows="8"></textarea>
+                                        </div>
+                                        <div class="slds-m-bottom_snall flex-row slds-text-color_error slds-hide" id="participantsPayloadErrorMessage">Enter a valid JSON payload</div>
+                                    </div>
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label slds-truncate" for="participantOperationType"><abbr class="slds-required" title="required">* </abbr>Operation Type</label>
+                                        <div class="slds-form-element__control">
+                                            <select class="slds-select" id="participantOperationType">
+                                                <option value="Remove">Remove</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="post-messaging-session-container" class="slds-hide">
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label" for="messaging-session-channel-address-id">
+                                            <abbr class="slds-required" title="required">* </abbr>
+                                            Channel Address Identifier
+                                        </label>
+                                        <div class="slds-form-element__control">
+                                            <input type="text" id="messaging-session-channel-address-id" placeholder="Please enter Channel Address Identifier" class="slds-input" />
+                                        </div>
+                                    </div>
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label" for="messaging-session-conversation-id">
+                                            <abbr class="slds-required" title="required">* </abbr>
+                                            Conversation Identifier
+                                        </label>
+                                        <div class="slds-form-element__control">
+                                            <input type="text" id="messaging-session-conversation-id" placeholder="Please enter Conversation Identifier" class="slds-input" />
+                                        </div>
+                                    </div>
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label" for="messaging-session-end-user-client-id">
+                                            <abbr class="slds-required" title="required">* </abbr>
+                                            End User Client Identifier
+                                        </label>
+                                        <div class="slds-form-element__control">
+                                            <input type="text" id="messaging-session-end-user-client-id" placeholder="Please enter End User Client Identifier" class="slds-input" />
+                                        </div>
+                                    </div>
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label slds-truncate" for="messaging-session-operation">
+                                            <abbr class="slds-required" title="required">* </abbr>
+                                            Operation
+                                        </label>
+                                        <div class="slds-form-element__control">
+                                            <select class="slds-select" id="messaging-session-operation">
+                                                <option value="End">End</option>
+                                                <option value="Inactivate">Inactivate</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="slds-form-element slds-form-element_stacked">
+                                        <label class="slds-form-element__label slds-truncate" for="messaging-session-operation-by">
+                                            Operation By
+                                        </label>
+                                        <div class="slds-form-element__control">
+                                            <select class="slds-select" id="messaging-session-operation-by">
+                                                <option value="EndUser">End User</option>
+                                                <option value="System">System</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div id="inactivate-session-container" class="slds-hide">
+                                        <div class="slds-form-element slds-form-element_stacked">
+                                            <label class="slds-form-element__label" for="messaging-session-id">
+                                                <abbr class="slds-required" title="required">* </abbr>
+                                                Messaging Session Id
+                                            </label>
+                                            <div class="slds-form-element__control">
+                                                <input type="text" id="messaging-session-id" placeholder="Please enter Session Id" class="slds-input" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="slds-form-element slds-form-element_stacked">
                                     <div class="slds-p-top_small slds-p-bottom_small ">
                                         <button type="submit" class="slds-button slds-button_brand slds-button_stretch" id="run-selected-api-button">Run</button>
@@ -2286,6 +2374,7 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
 <script src="/assets/remote.bundle.js"></script>
 <script src="/assets/ottapp.bundle.js"></script>
 <script src="https://unpkg.com/axios@0.27.2/dist/axios.min.js" integrity="sha384-vmbbJNC6Li6w5GzrydJ5cd4ttMcLJ/Nl5xgp5saZ5QV8fp7zdsrFDcCasGqOFlaC" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </body>
 </html>
 <!-- uncomment for use in visualforce page</apex:page>  -->

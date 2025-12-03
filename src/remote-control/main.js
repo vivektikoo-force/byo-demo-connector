@@ -169,6 +169,7 @@ const hasSetExternalMicrophoneDeviceSetting = document.getElementById('hasSetExt
 const hasSetExternalSpeakerDeviceSetting = document.getElementById('hasSetExternalSpeakerDeviceSetting');
 signedRecordingDetails.style.display = "none";
 const consultTranscriptArticle = document.getElementById('consult-transcription-article');
+const SERVER_URL = "/api";
 
 
 function getCallId(i) {
@@ -524,11 +525,10 @@ function prettyPrintCalls(activeCalls) {
             removeSupervisorButton.style.display = "block";
         }
         consultButton.disabled = !(consultAllowedCheckbox.checked && canConsultCheckbox.checked && activeCalls.length > 1);
-        addParticipantButton.disabled = false;
+        addParticipantButton.disabled = activeCalls.length === MAX_PARTICIPANTS_INDEX || (!call.callAttributes.isAutoMergeOn && activeCalls.length > 1);
         activeCallsCard.style.display = "block";
         acceptCallButton.disabled = softphoneRadio.checked;
         declineCallButton.disabled = softphoneRadio.checked;
-        addParticipantButton.disabled = activeCalls.length === MAX_PARTICIPANTS_INDEX;
         activeCalls.forEach((call,i) => {
             if (call.callAttributes.isConsultCall && !consultButton.disabled) {
                 isConsultCallPresent = true;
@@ -696,6 +696,8 @@ showMuteButton.addEventListener('click', updateCallInfo);
 callHasMute.addEventListener('click', updateCallInfo);
 showRecordButton.addEventListener('click', updateCallInfo);
 callHasRecord.addEventListener('click', updateCallInfo);
+showAddCallerButton.addEventListener('click', updateCallInfo);
+callHasAddParticipant.addEventListener('click', updateCallInfo);
 
 function showLoginChanged() {
     sendMessageToConnector({
@@ -1410,15 +1412,18 @@ function showCcaasDemoAppTab() {
 
 function setDemoConnectorMode(mode) {
     //set the mode to server cache so that OTT client apps can also access this information
-    fetch("http://localhost:3030/setOrgMode", {
+    fetch(SERVER_URL + "/setOrgMode", {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({orgMode : mode }),
-    }).then(response => response.json()).then((data) => {
+        body: JSON.stringify({orgMode: mode}),
+    }).then(response => response.json())
+    .then(data => {
         console.log('setOrgMode response: ' + JSON.stringify(data));
-    })
+    }).catch((err) => {
+        console.log(`setOrgMode failed - ${err}`);
+    });
 
     // connector mode only applicable for ccaas remote. 
     if (!window.location.pathname.startsWith('/ccaas')) {
@@ -1502,7 +1507,7 @@ function endACW(){
 }
 
 function retrySubscribe(){
-    fetch("http://localhost:3030/connect-and-subscribe", {
+    fetch(SERVER_URL + "/connect-and-subscribe", {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json'

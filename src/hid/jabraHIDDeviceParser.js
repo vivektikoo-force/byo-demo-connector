@@ -1,5 +1,5 @@
 import {HIDParser} from "./hidDeviceParser";
-import {Constants, publishEvent} from "@salesforce/scv-connector-base";
+import {Constants, publishEvent} from '@salesforce/scv-connector-base';
 
 let acceptHangupCalbuffer = [1, 0, 1, 0];
 let buffer = [];

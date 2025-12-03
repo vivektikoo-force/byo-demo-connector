@@ -10,7 +10,7 @@ import {
 } from "../common/util.js";
 
 const axios = require('axios');
-const SERVER_URL = "http://localhost:3030";
+const SERVER_URL = "/api";
 const READ_ACK_TITLE = "ReadAcknowledgement";
 const DELIVERY_ACK_TITLE = "DeliveryAcknowledgement";
 const ROUTING_WORK_RESULT = "RoutingWorkResult";

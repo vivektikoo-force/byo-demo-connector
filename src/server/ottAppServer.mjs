@@ -179,7 +179,7 @@ export async function initOttApp(expressApp) {
   const __dirname = path.dirname(__filename);
 
   const UPLOADS_DIR = '/../../uploads';
-  expressApp.use('/uploads', express.static(__dirname + UPLOADS_DIR));
+  expressApp.use('/api/uploads', express.static(__dirname + UPLOADS_DIR));
   console.log(getTimeStampForLoglines() + 'uplaod dir: ', __dirname + UPLOADS_DIR);
 
   // ========== Endpoint definitions start. ==========
@@ -190,9 +190,9 @@ export async function initOttApp(expressApp) {
   });
 
   // Register sendmessage endpoint
-  expressApp.post('/sendmessage', upload.single('attachment'), (req, res) => {
-      const responseData = handleSendmessage(req);
-      res.json(responseData); 
+  expressApp.post('/api/sendmessage', upload.single('attachment'), async(req, res) => {
+      const responseData = await handleSendmessage(req);
+      res.json(!!responseData.data ? responseData.data : responseData);
   });
 
   // Register sendConversationEntry endpoint
@@ -226,7 +226,7 @@ export async function initOttApp(expressApp) {
   });
 
   // Register apiLab endpoint
-  expressApp.post('/apiLab', jsonParser, (req, res) => {
+  expressApp.post('/api/apiLab', jsonParser, (req, res) => {
     try{
       console.log(getTimeStampForLoglines() + "ottAppServer apiLab call");
       console.dir(req.body);
@@ -332,12 +332,43 @@ export async function initOttApp(expressApp) {
             "routingAttributes": req.body.routingAttributes
           }
           break;
+        case 'POST_PARTICIPANT':
+          req.body = {
+            // fields value from UI
+            "apiName": req.body.apiName,
+            "conversationIdentifier": req.body.conversationIdentifier,
+            "operation": req.body.operation,
+            "participants": req.body.participants
+          }
+          break;
+        case 'POST_MESSAGING_SESSION':
+          if (req.body.operation === "Inactivate") {
+            req.body = {
+              "apiName": req.body.apiName,
+              "channelAddressIdentifier": req.body.channelAddressIdentifier,
+              "conversationIdentifier": req.body.conversationIdentifier,
+              "endUserClientId": req.body.endUserClientId,
+              "operation": req.body.operation,
+              "operationBy": req.body.operationBy,
+              "sessionId": req.body.sessionId
+            };
+          } else { // if (req.body.operation === "End")
+            req.body = {
+              "apiName": req.body.apiName,
+              "channelAddressIdentifier": req.body.channelAddressIdentifier,
+              "conversationIdentifier": req.body.conversationIdentifier,
+              "endUserClientId": req.body.endUserClientId,
+              "operation": req.body.operation,
+              "operationBy": req.body.operationBy
+            };
+          }
+          break;
       }
       sendRunApiLabRequest(req).then(response =>{
         res.json(response);
       });
     } catch {
-      console.error("Error handling /apiLab request:", error);
+      console.error("Error handling /api/apiLab request:", error);
       res.status(500).json({ error: "Internal Server Error" });
     }
   });
@@ -359,8 +390,8 @@ export async function initOttApp(expressApp) {
   });
 
   // Register sendsettings endpoint
-  expressApp.post('/sendsettings', jsonParser, (req, res) => {
-    console.log(getTimeStampForLoglines() + "/sendsettings request:", req);
+  expressApp.post('/api/sendsettings', jsonParser, (req, res) => {
+    console.log(getTimeStampForLoglines() + "/api/sendsettings request:", req);
     settingsCache.set("authorizationContext", req.body.authorizationContext);
     settingsCache.set("authorizationContextType", req.body.authorizationContextType);
     settingsCache.set("channelAddressIdentifier", req.body.channelAddressIdentifier);
@@ -375,7 +406,7 @@ export async function initOttApp(expressApp) {
   });
 
   // Register CCD endpoint
-  expressApp.get('/getConversationChannelDefinitions', async (req, res) => {
+  expressApp.get('/api/getConversationChannelDefinitions', async (req, res) => {
     try {
       console.log(getTimeStampForLoglines() + "/getConversationChannelDefinitions request:", req);
       const ccdData = await getConversationChannelDefinitions();
@@ -399,7 +430,7 @@ export async function initOttApp(expressApp) {
   });
 
   // Register CMC endpoint
-  expressApp.post('/getCustomMsgChannels', async (req, res) => {
+  expressApp.post('/api/getCustomMsgChannels', async (req, res) => {
     try {
       console.log(getTimeStampForLoglines() + "/getCustomMsgChannel request with ccdId: ", req.body.ccdId);
       const cmcData = await getCustomMsgChannel(req.body.ccdId);
@@ -411,8 +442,8 @@ export async function initOttApp(expressApp) {
   });
 
   // Register health check validation tests endpoint
-  expressApp.get('/runAllValidationTests', async (req, res) => {
-    console.log(getTimeStampForLoglines() + "Received request for /runAllValidationTests");
+  expressApp.get('/api/runAllValidationTests', async (req, res) => {
+    console.log(getTimeStampForLoglines() + "Received request for /api/runAllValidationTests");
     try {
         const pageType = req.query.pageType;
 
@@ -441,7 +472,7 @@ export async function initOttApp(expressApp) {
 });
 
   // Register getsettings endpoint
-  expressApp.get('/getsettings', urlencodedParser, (req, res) => {
+  expressApp.get('/api/getsettings', urlencodedParser, (req, res) => {
     const responseData = {
       authorizationContext: settingsCache.get("authorizationContext"),
       channelAddressIdentifier: CHANNEL_ADDRESS_IDENTIFIER,
@@ -525,20 +556,20 @@ export async function initOttApp(expressApp) {
     res.send('Subscribed to the Interaction event.');
   });
 
-  expressApp.get('/connect-and-subscribe', async (_req, res) => {
+  expressApp.get('/api/connect-and-subscribe', async (_req, res) => {
     let sfdcPubSubClient = await connectToPubSubApi();
     subscribeToSfInteractionEvent(sfdcPubSubClient);
 
     res.send('Connected to PubSub and Subscribed to the Interaction event.');
   });
 
-  expressApp.post('/setOrgMode', async (_req, res) => {
+  expressApp.post('/api/setOrgMode', async (_req, res) => {
     settingsCache.set('orgMode', _req.body.orgMode);
     console.log(getTimeStampForLoglines() + "OTT SERVER settingsCache.set('orgMode') : " + _req.body.orgMode);
     res.send({success:true});
   });
 
-  expressApp.get('/getOrgMode', async (_req, res) => {
+  expressApp.get('/api/getOrgMode', async (_req, res) => {
     let cachedOrgMode = settingsCache.get('orgMode');
     console.log(getTimeStampForLoglines() + "OTT SERVER settingsCache.get('orgMode') : " + cachedOrgMode);
 
@@ -551,11 +582,11 @@ export async function initOttApp(expressApp) {
     res.send({orgMode: cachedOrgMode});
   });
 
-  expressApp.get('/getApiVersion', (req, res) => {
+  expressApp.get('/api/getApiVersion', (req, res) => {
     res.send(API_VERSION);
   });
 
-  expressApp.get('/convEntryIds', async (_req, res) => {
+  expressApp.get('/api/convEntryIds', async (_req, res) => {
     res.send(convEntryIdsCache.keys());
   });
   
@@ -779,9 +810,11 @@ async function subscribeToSfInteractionEvent(sfdcPubSubClient) {
 
               switch (entryType) {
                 case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.ROUTING_WORK_RESULT: 
+                case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.DELIVERY_ACKNOWLEDGEMENT:
+                case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.READ_ACKNOWLEDGEMENT:
                   // Push reply obj
                   replyObjStr = JSON.stringify({
-                    type: eventType,
+                    eventType,
                     channelAddressIdFieldVal,
                     recipientUserName,
                     payloadField

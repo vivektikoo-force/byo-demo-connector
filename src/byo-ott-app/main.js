@@ -3,9 +3,19 @@ import { testDescriptionMapping, testDescriptions, knowledgeArticles } from '../
 import { marked } from '../common/marked.esm.js';
 import DOMPurify from 'dompurify';
 const axios = require('axios');
-const SERVER_URL = "http://localhost:3030";
-const READ_ACK_PREFIX = "read_ack_";
-const DELIVERED_ACK_PREFIX = "delivered_ack_";
+const SERVER_URL = "/api";
+const OUTBOUND_MESSAGE_LIST_ITEM_CLASS_NAME = "slds-chat-listitem_outbound";
+const OUTBOUND_MESSAGE_LIST_ITEM_QUERY_CLASS_NAME = "." + OUTBOUND_MESSAGE_LIST_ITEM_CLASS_NAME;
+const ACK_BADGE_CONTAINER_CLASS_NAME = "ack_badge_container";
+const ACK_BADGE_CONTAINER_QUERY_CLASS_NAME = "." + ACK_BADGE_CONTAINER_CLASS_NAME;
+const READ_ACK_CLASS_Name = "read_ack";
+const READ_ACK_QUERY_CLASS_Name = "." + READ_ACK_CLASS_Name;
+const READ_ACK_BADGE_ID_PREFIX = READ_ACK_CLASS_Name + "_";
+const DELIVERY_ACK_CLASS_Name = "delivery_ack";
+const DELIVERY_ACK_QUERY_CLASS_Name = "." + DELIVERY_ACK_CLASS_Name;
+const DELIVERY_ACK_BADGE_ID_PREFIX = DELIVERY_ACK_CLASS_Name + "_";
+const DISPLAY_STYLE_NONE = "none";
+const DISPLAY_STYLE_BLOCK = "block";
 let chatList;
 let output;
 let sfSubject = "Agent";
@@ -13,10 +23,6 @@ let endUserClientName = "End User Client";
 let typingStartedReady = true;
 let indicatorStatus;
 var orgMode;
-var lastReadAckEntry;
-var lastDeliveredAckEntry;
-var convEntryNumber = 0;
-var convEntryIds;
 
 window.addEventListener("load", () => {
 
@@ -72,7 +78,7 @@ window.addEventListener("load", () => {
     }
   });
 
-  function sendMessage(e) {
+  async function sendMessage(e) {
     e.preventDefault();
 
     // For blank value of message, do nothing
@@ -80,34 +86,6 @@ window.addEventListener("load", () => {
     if (!msg || msg.trim() === '') {
       return;
     }
-
-    // construct FormData object using html form
-    let formData = new FormData(messageForm);
-
-    let timestamp = Date.now();
-    if (messageForm.elements.attachment.value) {
-      formData.append("interactionType", "AttachmentInteraction");
-      formData.append("timestamp", timestamp);
-    } else {
-      formData.append("interactionType", "EntryInteraction");
-      formData.append("entryType", "Message");
-    }
-    formData.append("messageType", "StaticContentMessage");
-
-    // submit the request to middleware server
-    axios({
-      method: "post",
-      url: SERVER_URL + "/sendmessage",
-      data: formData
-    })
-      .then((res) => {
-        if (res.status === 200) {
-          console.log(res);
-        }
-      })
-      .catch((err) => {
-        throw err;
-      });
 
     // Add attachment for outbound message in chatList if any
     let originalFileName = null;
@@ -125,9 +103,53 @@ window.addEventListener("load", () => {
         fileName = fileName + timestamp;
       }
     }
-    // Add outbound message in chatList and clear the message box contect and attachment if any after submit the request
+
+    // Add outbound message without ack badge elems first in chatList first
     let messageInputBox = messageForm.elements.message;
-    appendOutboundMessageToChatList(messageInputBox.value, originalFileName, fileName);
+    let outboundMessageElem = appendOutboundMessageToChatList(messageInputBox.value, originalFileName, fileName);
+
+    // construct FormData object using html form
+    let formData = new FormData(messageForm);
+
+    let timestamp = Date.now();
+    if (messageForm.elements.attachment.value) {
+      formData.append("interactionType", "AttachmentInteraction");
+      formData.append("timestamp", timestamp);
+    } else {
+      formData.append("interactionType", "EntryInteraction");
+      formData.append("entryType", "Message");
+    }
+    formData.append("messageType", "StaticContentMessage");
+
+    // submit the request to middleware server
+    let sendMessageRes = await axios({
+      method: "post",
+      url: SERVER_URL + "/sendmessage",
+      data: formData
+    })
+      .then((res) => {
+        if (res.status === 200) {
+          return res;
+        }
+      })
+      .catch((err) => {
+        return err;
+      });
+    console.log("====== /sendmessage POST response:", sendMessageRes);
+    if (!!sendMessageRes && !!sendMessageRes.data && sendMessageRes.data.status === 500) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: sendMessageRes.data.message
+      });      
+
+      return;
+    }
+
+    // Insert ack badge elems to outbound message elem
+    insertAckBadgeElemsToOutboundMessageHTMLElem(outboundMessageElem, sendMessageRes);
+
+    // Clear the message box contect and attachment if any after submit the request
     messageInputBox.value = '';
     messageForm.elements.attachment.value = null;
 
@@ -255,6 +277,28 @@ window.addEventListener("load", () => {
               formData.apiName = document.getElementById("selected-api-name").value;
             }
             break;
+
+        case "POST_PARTICIPANT":
+          formData = {
+            "apiName": document.getElementById("selected-api-name").value,
+            "conversationIdentifier": document.getElementById("conversationIdForPostParticipant").value,
+            "operation": document.getElementById("participantOperationType").value,
+            "participants": participantsPayload
+          };
+          break;
+        case "POST_MESSAGING_SESSION":
+          formData = {
+            "apiName": document.getElementById("selected-api-name").value,
+            "channelAddressIdentifier" : document.getElementById("messaging-session-channel-address-id").value,
+            "conversationIdentifier": document.getElementById("messaging-session-conversation-id").value,
+            "endUserClientId": document.getElementById("messaging-session-end-user-client-id").value,
+            "operation": document.getElementById("messaging-session-operation").value,
+            "operationBy": document.getElementById("messaging-session-operation-by").value
+          };
+          if (formData.operation === "Inactivate") {
+            formData.sessionId = document.getElementById("messaging-session-id").value;
+          }
+          break;
         default:
           throw Error('Not a valid API selected');
       }
@@ -283,112 +327,54 @@ window.addEventListener("load", () => {
   });
 
   // Render api fields base on selected API
-  const deleteRouteAPIContainer = document.getElementById("deleteRouteAPIContainer");
-  const postRouteAPIContainer = document.getElementById("postRouteAPIContainer");
-  const postRouteResultAPIContainer = document.getElementById("postRouteResultAPIContainer");
-  const consentAPIContainer = document.getElementById("consentAPIContainer");
-  const patchRegisterCapabilitiesAPIContainer = document.getElementById("patchRegisterCapabilitiesAPIContainer");
-  const postAgentWorkAPIContainer = document.getElementById("postAgentWorkAPIContainer");
-  const postConversationAPIContainer = document.getElementById("postConversationAPIContainer");
-  const postConversationHistoryAPIContainer = document.getElementById("postConversationHistoryAPIContainer");
+  const apiContainers = {
+    CONSENT: document.getElementById("consentAPIContainer"),
+    POST_ROUTE: document.getElementById("postRouteAPIContainer"),
+    DELETE_ROUTE: document.getElementById("deleteRouteAPIContainer"),
+    POST_ROUTING_RESULT: document.getElementById("postRouteResultAPIContainer"),
+    PATCH_REGISTER_CAPABILITIES: document.getElementById("patchRegisterCapabilitiesAPIContainer"),
+    POST_AGENT_WORK: document.getElementById("postAgentWorkAPIContainer"),
+    POST_CONVERSATION: document.getElementById("postConversationAPIContainer"),
+    POST_CONVERSATION_HISTORY: document.getElementById("postConversationHistoryAPIContainer"),
+    POST_PARTICIPANT: document.getElementById("postParticipantAPIContainer"),
+    POST_MESSAGING_SESSION: document.getElementById("post-messaging-session-container"),
+  };
+
+  const hideAllContainers = () => {
+    Object.values(apiContainers).forEach(container => container?.classList.add("slds-hide"));
+  };
+
+  const showContainer = (api) => {
+    const container = apiContainers[api];
+    if (container) {
+      container.classList.remove("slds-hide");
+    }
+    if (api === "PATCH_REGISTER_CAPABILITIES") {
+      capabilitiesPayload.classList.add("slds-hide");
+    }
+  };
+
   const apiDropdown = document.getElementById("selected-api-name");
   apiDropdown.addEventListener("change", (event) => {
     const selectedAPI = event.target.value;
-    switch (selectedAPI) {
-      // show the consentAPIContainer
-      case "CONSENT":
-        consentAPIContainer.classList.remove("slds-hide");
-        postRouteAPIContainer.classList.add("slds-hide");
-        deleteRouteAPIContainer.classList.add("slds-hide");
-        postRouteResultAPIContainer.classList.add("slds-hide");
-        patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
-        postAgentWorkAPIContainer.classList.add("slds-hide");
-        postConversationAPIContainer.classList.add("slds-hide");
-        postConversationHistoryAPIContainer.classList.add("slds-hide");
-        break;
-      case "POST_ROUTE":
-        postRouteAPIContainer.classList.remove("slds-hide");
-        consentAPIContainer.classList.add("slds-hide");
-        deleteRouteAPIContainer.classList.add("slds-hide");
-        postRouteResultAPIContainer.classList.add("slds-hide");
-        patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
-        postAgentWorkAPIContainer.classList.add("slds-hide");
-        postConversationAPIContainer.classList.add("slds-hide");
-        postConversationHistoryAPIContainer.classList.add("slds-hide");
-        break;
-      case "DELETE_ROUTE":
-        consentAPIContainer.classList.add("slds-hide");
-        postRouteAPIContainer.classList.add("slds-hide");
-        deleteRouteAPIContainer.classList.remove("slds-hide");
-        postRouteResultAPIContainer.classList.add("slds-hide");
-        patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
-        postAgentWorkAPIContainer.classList.add("slds-hide");
-        postConversationAPIContainer.classList.add("slds-hide");
-        postConversationHistoryAPIContainer.classList.add("slds-hide");
-        break;
-      case "POST_ROUTING_RESULT":
-        consentAPIContainer.classList.add("slds-hide");
-        postRouteAPIContainer.classList.add("slds-hide");
-        deleteRouteAPIContainer.classList.add("slds-hide");
-        postRouteResultAPIContainer.classList.remove("slds-hide");
-        patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
-        postAgentWorkAPIContainer.classList.add("slds-hide");
-        postConversationAPIContainer.classList.add("slds-hide");
-        postConversationHistoryAPIContainer.classList.add("slds-hide");
-        break;
-      case "PATCH_REGISTER_CAPABILITIES":
-        consentAPIContainer.classList.add("slds-hide");
-        postRouteAPIContainer.classList.add("slds-hide");
-        deleteRouteAPIContainer.classList.add("slds-hide");
-        postRouteResultAPIContainer.classList.add("slds-hide");
-        patchRegisterCapabilitiesAPIContainer.classList.remove("slds-hide");
-        capabilitiesPayload.classList.add("slds-hide");
-        postAgentWorkAPIContainer.classList.add("slds-hide");
-        postConversationAPIContainer.classList.add("slds-hide");
-        postConversationHistoryAPIContainer.classList.add("slds-hide");
-        break;
-      case "POST_AGENT_WORK":
-        consentAPIContainer.classList.add("slds-hide");
-        postAgentWorkAPIContainer.classList.remove("slds-hide");
-        postRouteAPIContainer.classList.add("slds-hide");
-        deleteRouteAPIContainer.classList.add("slds-hide");
-        postRouteResultAPIContainer.classList.add("slds-hide");
-        patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
-        postConversationAPIContainer.classList.add("slds-hide");
-        postConversationHistoryAPIContainer.classList.add("slds-hide");
-        break;
-      case "POST_CONVERSATION":
-        consentAPIContainer.classList.add("slds-hide");
-        postAgentWorkAPIContainer.classList.add("slds-hide");
-        postRouteAPIContainer.classList.add("slds-hide");
-        deleteRouteAPIContainer.classList.add("slds-hide");
-        postRouteResultAPIContainer.classList.add("slds-hide");
-        patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
-        postConversationAPIContainer.classList.remove("slds-hide");
-        postConversationHistoryAPIContainer.classList.add("slds-hide");
-        break;
-      case "POST_CONVERSATION_HISTORY":
-        consentAPIContainer.classList.add("slds-hide");
-        postAgentWorkAPIContainer.classList.add("slds-hide");
-        postRouteAPIContainer.classList.add("slds-hide");
-        deleteRouteAPIContainer.classList.add("slds-hide");
-        postRouteResultAPIContainer.classList.add("slds-hide");
-        patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
-        postConversationAPIContainer.classList.add("slds-hide");
-        postConversationHistoryAPIContainer.classList.remove("slds-hide");
-        break;
-      default:
-        consentAPIContainer.classList.add("slds-hide");
-        postRouteAPIContainer.classList.add("slds-hide");
-        deleteRouteAPIContainer.classList.add("slds-hide");
-        postRouteResultAPIContainer.classList.add("slds-hide");
-        patchRegisterCapabilitiesAPIContainer.classList.add("slds-hide");
-        postAgentWorkAPIContainer.classList.add("slds-hide");
-        postConversationAPIContainer.classList.add("slds-hide");
-        postConversationHistoryAPIContainer.classList.add("slds-hide");
-        break;
-    }
+    hideAllContainers();
+    showContainer(selectedAPI);
   });
+
+  const messagingSessionOperationDropdown = document.getElementById("messaging-session-operation");
+  const inactivateSessionContainer = document.getElementById("inactivate-session-container");
+  if (messagingSessionOperationDropdown) {
+    messagingSessionOperationDropdown.addEventListener("change", (event) => {
+      const selectedMessagingSessionOperation = event.target.value;
+      switch (selectedMessagingSessionOperation) {
+        case "Inactivate":
+          inactivateSessionContainer?.classList.remove("slds-hide");
+          break;
+        default:
+          inactivateSessionContainer?.classList.add("slds-hide");
+      }
+    });
+  }
 
   const flowInfoContainer = document.getElementById("flowInfoContainer");
   const queueInfoContainer = document.getElementById("queueInfoContainer");
@@ -573,8 +559,39 @@ window.addEventListener("load", () => {
     });
   }
 
+  const participantTextArea = document.getElementById('participantsPayload');
+  participantTextArea.addEventListener('input', async() => {
+    await validateParticipantsPayload(participantTextArea, false);
+  });
+
+  participantTextArea.addEventListener('blur', async() => {
+    await validateParticipantsPayload(participantTextArea, true);
+  })
+
+
+  let participantsPayload = {};
+  // JSON payload validation when the user finishes typing the payload
+  // format is used to format the payload when the user finishes typing the payload
+  async function validateParticipantsPayload(participantTextArea, format=false) {
+      try {
+        const jsonContent = JSON.parse(participantTextArea.value);
+        participantsPayload = jsonContent;
+        participantTextArea.parentElement.classList.remove('slds-has-error');
+        document.getElementById('participantsPayloadErrorMessage').classList.add('slds-hide');
+        if (format) {
+          participantTextArea.value = JSON.stringify(jsonContent, null, 2);
+        }
+      } catch (error) {
+        participantTextArea.parentElement.classList.add('slds-has-error');
+        document.getElementById('participantsPayloadErrorMessage').classList.remove('slds-hide');
+        participantsPayload = {};
+      }
+  }
+
   // Register custom event to retrieve the replied message from an agent in core app
-  const evtSource = new EventSource(SERVER_URL + "/replyMessage");
+  //let eventSourceUrl = "" + window.location.origin + "/replyMessage";
+  let eventSourceUrl = "/api/replyMessage";
+  const evtSource = new EventSource(eventSourceUrl);
   evtSource.addEventListener("replymsg", (e) => {
     if (!orgMode) {
       axios({
@@ -640,9 +657,10 @@ window.addEventListener("load", () => {
             indicatorStatus = entryType;
             generateIndicators(indicatorStatus, payload.payload, replyObj.replyMessageText);
             return;
+          case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.ROUTING_WORK_RESULT:
           case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.READ_ACKNOWLEDGEMENT:
           case messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.DELIVERY_ACKNOWLEDGEMENT:
-            handleAckEvent(JSON.parse(event.data));
+            handleAckEventBadgeByClassName(JSON.parse(event.data));
             return;
         }
 
@@ -908,6 +926,11 @@ function getSettingsForApp() {
         }
       } else {
         console.log("Invalid CCD response");
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'An error occurred while retrieving CCD data, either because the server is down for maintenance or no records were found in the CCD table. The demo connector cannot function properly; please try again later!'
+        });
       }
     })
     .catch((err) => {
@@ -926,6 +949,8 @@ function appendOutboundMessageToChatList(message, originalFileName, fileName) {
   let outboundMessageHTMLElem = generateOutboundMessageHTMLElem(message);
 
   appendMessageToChatList(outboundMessageHTMLElem);
+
+  return outboundMessageHTMLElem;
 }
 
 function generateIndicators(indicatorStatus, payload, textMessage) {
@@ -991,8 +1016,9 @@ function reloadTypingIndicator() {
 function generateOutboundMessageHTMLElem(message) {
   let now = new Date();
   let dateTime = now.toLocaleString();
+
   let html =
-    '<li class="slds-chat-listitem slds-chat-listitem_outbound">' +
+    '<li class="slds-chat-listitem ' + OUTBOUND_MESSAGE_LIST_ITEM_CLASS_NAME + '">' +
     '  <div class="slds-chat-message">' +
     '    <div class="slds-chat-message__body">' +
     '      <div class="slds-chat-message__text slds-chat-message__text_outbound" style="white-space: normal;">' +
@@ -1000,29 +1026,44 @@ function generateOutboundMessageHTMLElem(message) {
     '        </div>' +
     '      </div>' +
     '      <div class="slds-chat-message__meta" aria-label="said ' + endUserClientName + ' at ' + dateTime + '">' + endUserClientName + ' • ' + dateTime +
-    '      <div class="slds-float_right" id="read_ack_' + convEntryNumber + '" style="display: none">' + 
-    '        <span class="slds-icon_container slds-p-left_large slds-icon-utility-check slds-p-right_xx-small" title="Delivered">' +
-    '                <svg class="slds-icon slds-icon_xx-small" aria-hidden="true">' +
-    '                      <use xlink:href="/slds/icons/utility/success.svg"></use>' +
-    '                </svg>' +
-    '        </span>' +
-    '        <span><i>Read</i></span>' +
-    '      </div>' +
-    '      <div class="slds-float_right" id="delivered_ack_' + convEntryNumber + '" style="display: none">' + 
-    '        <span class="slds-icon_container slds-p-left_large slds-icon-utility-check slds-p-right_xx-small" title="Delivered">' +
-    '                <svg class="slds-icon slds-icon_xx-small" aria-hidden="true">' +
-    '                      <use xlink:href="/slds/icons/utility/success.svg"></use>' +
-    '                </svg>' +
-    '        </span>' +
-    '        <span><i>Delivered</i></span>' +
-    '      </div>' +
+    '        <div class="slds-float_right ' + ACK_BADGE_CONTAINER_CLASS_NAME + '">' +
+    '        </div>' +
     '      </div>' +
     '    </div>'   +
     '  </div>' +
     '</li>';
 
-  convEntryNumber++;
   return htmlToElem(html);
+}
+
+function insertAckBadgeElemsToOutboundMessageHTMLElem(ackBadgeContainerElem, sendMessageRes) {
+  if (!ackBadgeContainerElem) {
+    return ackBadgeContainerElem;
+  }
+
+  let responseData = (!!sendMessageRes && sendMessageRes?.data) ? sendMessageRes?.data : null;
+  let conversationEntryId = (!!responseData && !!responseData.conversationEntryId) ? responseData.conversationEntryId : '';
+  let isSuccess = responseData ? responseData.success : false;
+  let html =
+    '          <div class="slds-p-left_x-small ' + READ_ACK_CLASS_Name + '" id="' + (READ_ACK_BADGE_ID_PREFIX + conversationEntryId) + '" style="display: ' + DISPLAY_STYLE_NONE + '">' +
+    '            <span><i>Read</i></span>' +
+    '            <span class="slds-icon_container slds-p-left_xx-small slds-icon-utility-check slds-p-right_xx-small" title="Read">' +
+    '              <img src="/assets/infoIcons/greenCheck.jpg" alt="Success" width="11" height="11" />' +
+    '            </span>' +
+    '          </div>' +
+    '          <div class="slds-p-left_x-small ' + DELIVERY_ACK_CLASS_Name + '" id="' + (DELIVERY_ACK_BADGE_ID_PREFIX + conversationEntryId) + '" style="display: ' +  DISPLAY_STYLE_BLOCK + '">' +
+    '            <span><i>Delivered</i></span>' +
+    '            <span class="slds-icon_container slds-p-left_xx-small slds-icon-utility-check slds-p-right_xx-small" title="Delivered">' +
+    '              <img src="/assets/infoIcons/' + (isSuccess ? 'greenCheck.jpg' : 'redCross.jpg') + '" alt="' + (isSuccess ? 'Success' : 'Error') + '" width="11" height="11"/>' +
+    '            </span>' +
+    '          </div>';
+
+  const items = ackBadgeContainerElem.getElementsByClassName(ACK_BADGE_CONTAINER_CLASS_NAME);
+  if (!!items && items.length > 0) {
+    items[0].innerHTML = html;
+  }
+
+  return ackBadgeContainerElem;
 }
 
 function forceLinksToOpenInNewTab(html) {
@@ -1046,6 +1087,85 @@ function forceLinksToOpenInNewTab(html) {
   );
 }
 
+function clearAckBadgesForPreviousOutboundMessageListItems(latestReadAckBadgeElem) {
+  let liElem = latestReadAckBadgeElem.closest(OUTBOUND_MESSAGE_LIST_ITEM_QUERY_CLASS_NAME);
+  if (!!liElem && liElem.tagName === "LI") {
+    liElem = liElem.previousElementSibling;
+    while (liElem && liElem.tagName === "LI" && liElem.className.indexOf(OUTBOUND_MESSAGE_LIST_ITEM_CLASS_NAME) !== -1)  {
+      let readAckBadgeElems = liElem.getElementsByClassName(READ_ACK_CLASS_Name);
+      if (readAckBadgeElems) {
+        if (readAckBadgeElems[0])
+        readAckBadgeElems[0].style.display = DISPLAY_STYLE_NONE;
+      }
+      let deliveryAckBadgeElems = liElem.getElementsByClassName(DELIVERY_ACK_CLASS_Name);
+      if (!!deliveryAckBadgeElems && !!deliveryAckBadgeElems[0].getElementsByTagName("img")) {
+        let imgs = deliveryAckBadgeElems[0].getElementsByTagName("img");
+        if (!!imgs && imgs[0].getAttribute("alt") === "Success") {
+          // Only clear delivery badge with Success state
+          deliveryAckBadgeElems[0].style.display = DISPLAY_STYLE_NONE;
+        }
+      }
+      liElem = liElem.previousElementSibling;
+    }
+  }
+}
+
+function handleAckEventBadgeByClassName(data) {
+  const outboundElemCount = document.querySelectorAll(ACK_BADGE_CONTAINER_QUERY_CLASS_NAME).length;
+  if (outboundElemCount === 0) {
+    // None of MEU outbound message badge entries in list
+    return;
+  }
+
+  // Clear all read event badges for MEU outbound message entries
+  document.querySelectorAll(READ_ACK_QUERY_CLASS_Name).forEach(el => {
+    el.style.display = DISPLAY_STYLE_NONE;
+  });
+
+  const ackMsgObj = JSON.parse(data.payloadField.string).payload.entryPayload;
+  const entryType = ackMsgObj.entryType;
+  if (entryType === messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.ROUTING_WORK_RESULT) {
+    if (ackMsgObj.workType === 'Assigned' || ackMsgObj.workType === 'Closed') {
+      // TODO: Add scripts for assigned/closed cases later if needed.
+    } else if (ackMsgObj.workType === 'Accepted') {
+      document.querySelectorAll(DELIVERY_ACK_QUERY_CLASS_Name).forEach(el => {
+        el.style.display = DISPLAY_STYLE_NONE;
+      });
+      document.querySelectorAll(READ_ACK_QUERY_CLASS_Name).forEach(el => {
+        el.style.display = DISPLAY_STYLE_BLOCK;
+      });
+    }
+
+    return;
+  }
+
+  let conversationEntryId = ackMsgObj.acknowledgedConversationEntryIdentifier;
+  conversationEntryId = conversationEntryId ? conversationEntryId : 'no_id_found';
+
+  let readAckBadgeElem = document.getElementById(READ_ACK_BADGE_ID_PREFIX + conversationEntryId);
+  let deliveryAckBadgeElem = document.getElementById(DELIVERY_ACK_BADGE_ID_PREFIX + conversationEntryId);
+  if (entryType === messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.READ_ACKNOWLEDGEMENT) {
+    if (deliveryAckBadgeElem) {
+      deliveryAckBadgeElem.style.display = DISPLAY_STYLE_NONE;
+    }
+    if (readAckBadgeElem) {
+      readAckBadgeElem.style.display = DISPLAY_STYLE_BLOCK;
+
+      // If current message is marked as "Read", all pervious "Delivered" messages with Success should be read too, just clear "Delivered" Success badges if any.
+      clearAckBadgesForPreviousOutboundMessageListItems(readAckBadgeElem)
+    }
+  } else if (entryType === messagingConstants.EVENT_PAYLOAD_ENTRY_TYPE.DELIVERY_ACKNOWLEDGEMENT) {
+    if (!!readAckBadgeElem && readAckBadgeElem.style.display === DISPLAY_STYLE_BLOCK) {
+      // Sometimes the DELIVERY_ACKNOWLEDGEMENT event was fired after READ_ACKNOWLEDGEMENT was fired, so prioritize "read" over "delivery" badge.
+      return;
+    } else {
+      if (deliveryAckBadgeElem) {
+        deliveryAckBadgeElem.style.display = DISPLAY_STYLE_BLOCK;
+      }
+    }
+  }
+}
+
 function parseMarkdown(text) {
   if (typeof text === 'string' && text.trim() !== '') {
     const markedOutput = forceLinksToOpenInNewTab(marked.parse(text).trim());
@@ -1058,76 +1178,6 @@ function parseMarkdown(text) {
     // Replace newline between <p> tags into <br> to preserve the intended linebreaks in the rendered output.
     return styledOutput.replace(/<\/p>\n<p>/g, "</p><br><p>");  
   }
-}
-
-async function handleAckEvent(data) {
-  // submit the request to middleware server
-  await axios({
-    method: "get",
-    url: SERVER_URL + "/convEntryIds"
-  }).then((res) => {
-    convEntryIds = res.data;
-    console.log('---------- convEntryIds array: ' + convEntryIds + ' -----------------');
-
-    if (convEntryIds) {
-      const ackMsgObj = JSON.parse(data.payloadField.string).payload.entryPayload;
-      const ackMsg = ackMsgObj.acknowledgedConversationEntryIdentifier;
-      const ackMsgId = convEntryIds.find(id => id === ackMsg);
-    
-      if (ackMsgId && ackMsgObj.entryType === READ_ACK_TITLE) {
-        lastReadAckEntry = setBadgeToLastEntry(ackMsgId, lastReadAckEntry, READ_ACK_TITLE);
-      } else if (ackMsgId && ackMsgObj.entryType === DELIVERY_ACK_TITLE) {
-        // Prioritize "read" over "delivery" badge
-        // has this msg been acked as "Read"?
-        if (getReadBadgeStatus(ackMsgId)) {
-          lastDeliveredAckEntry = ackMsgId;
-          return;
-        }
-    
-        lastDeliveredAckEntry = setBadgeToLastEntry(ackMsgId, lastDeliveredAckEntry, DELIVERY_ACK_TITLE);
-      }
-    }
-  }).catch((err) => {
-      throw err;
-  });
-}
-
-function setBadgeToLastEntry(convEntryId, lastAckEventEntry, entryType) {
-  if (lastAckEventEntry) {
-    setBadge(lastAckEventEntry, entryType, false);
-  }
-
-  return setBadge(convEntryId, entryType, true);
-}
-
-function setBadge(ackMsgId, entryType, showBadge) {
-  const idx = convEntryIds.indexOf(ackMsgId);
-  let val = showBadge ? 'block' : 'none';
-  if (entryType === READ_ACK_TITLE && document.getElementById(READ_ACK_PREFIX + idx)) {
-    console.log('------- mark idx ', idx, ' outbound msg as READ');
-    document.getElementById(READ_ACK_PREFIX + idx).style.display = val;
-    // make sure to hide 'Delivered' badge when mark the same entry as 'Read'
-    if (val === 'block' && document.getElementById(DELIVERED_ACK_PREFIX + idx)) {
-      document.getElementById(DELIVERED_ACK_PREFIX + idx).style.display = 'none';
-    }
-  } else if (entryType === DELIVERY_ACK_TITLE && document.getElementById(DELIVERED_ACK_PREFIX + idx)) {
-    console.log('------- mark idx ', idx, ' outbound msg as DELIVERED');
-    document.getElementById(DELIVERED_ACK_PREFIX + idx).style.display = val;
-  } 
-
-  return ackMsgId;
-}
-
-function getReadBadgeStatus(convEntryId) {
-  const idx = convEntryIds.indexOf(convEntryId);
-  if (document.getElementById(READ_ACK_PREFIX + idx)) {
-    const val =  document.getElementById(READ_ACK_PREFIX + idx).style.display;
-    if (val === 'block') {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function createAndAppendNotificationHTMLElem(element) {
