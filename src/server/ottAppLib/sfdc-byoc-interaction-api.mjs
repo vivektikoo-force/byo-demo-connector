@@ -106,6 +106,7 @@ export async function sendSFInboundMessageInteraction(orgId, authorizationContex
     console.log(getTimeStampForLoglines() + `sendSFInboundMessageInteraction() success for interactionType "${interactionType}": `, response.data);
     checkAndCreateAgentWork(orgId, authorizationContext, routingOwner, response.data, autoCreateAgentWork);
 
+    response.data['conversationEntryId'] = entryId;
     return response.data;
   })
     .catch(function (error) {

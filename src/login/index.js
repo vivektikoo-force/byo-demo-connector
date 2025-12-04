@@ -5,7 +5,8 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import Constants from '../common/constants'
+import Constants from '../common/constants';
+import { io } from "socket.io-client";
 
 const submitButton = document.getElementById('submit');
 const previewButton = document.getElementById('preview');
@@ -31,9 +32,6 @@ submitButton.addEventListener('click', () => {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const success = (username === 'test' && password === 'test');
-    const requestBroadcastChannel = new BroadcastChannel('rc-request');
-    requestBroadcastChannel.postMessage({
-        type: Constants.LOGIN_SUBMIT,
-        success
-    });
+    const socket = io();
+    socket.emit("message", { data: {success, type: Constants.LOGIN_SUBMIT} });
 });
