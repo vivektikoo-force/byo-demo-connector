@@ -926,11 +926,6 @@ function getSettingsForApp() {
         }
       } else {
         console.log("Invalid CCD response");
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'An error occurred while retrieving CCD data, either because the server is down for maintenance or no records were found in the CCD table. The demo connector cannot function properly; please try again later!'
-        });
       }
     })
     .catch((err) => {
