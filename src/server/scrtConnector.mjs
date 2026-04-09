@@ -56,6 +56,10 @@ export const ScrtConnector = {
         onlineUserIds[userEmail] = user;
     },
 
+    removeOnlineUserIds(userEmail) {
+        delete onlineUserIds[userEmail];
+    },
+
     configureTenantInfo(params) {
         tenantInfo.scrtBaseUrl = params.scrtBaseUrl;
         tenantInfo.orgId = params.orgId;
