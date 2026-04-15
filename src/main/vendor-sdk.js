@@ -687,78 +687,7 @@ export class Sdk {
 
         // Phase 1: Listen for server-initiated events
         socket.on('server_event', message => {
-            switch(message.eventType) {
-                case USER_MESSAGE.MUTE:
-                    this.processBroadcastMute(message.data.call, message.data.isMuted);
-                    break;
-                case USER_MESSAGE.UNMUTE:
-                    this.processBroadcastMute(message.data.call, message.data.isMuted);
-                    break;
-                case USER_MESSAGE.HOLD_TOGGLE:
-                    this.processHoldToggle(message.data);
-                    break;
-                case USER_MESSAGE.CALL_STARTED:
-                    this.startTransferOrConsultCall(message);
-                    break;
-                case USER_MESSAGE.INTERNAL_CALL_STARTED:
-                    this.startInternalCall(message);
-                    break;
-                case USER_MESSAGE.PARTICIPANT_CONNECTED:
-                    this.connectParticipant(message.data.call.callInfo, message.data.call.callType, message.data.call);
-                    break;
-                case USER_MESSAGE.CALL_BARGED_IN:
-                    this.publishCallBargedInEventToAgents(message.data);
-                    break;
-                case USER_MESSAGE.CALL_DESTROYED:
-                    if (!this.isSupervisorListeningIn()) {
-                        this.processCallDestroyed(message.data);
-                    }
-                    break;
-                case USER_MESSAGE.MERGE:
-                    if (!this.hasActiveCalls()) {
-                        return;
-                    }
-
-                    // Don't merge the supervisor if the supervisor is actively listening into a call
-                    if (message.fromUsername !== this.state.agentId && message.data.consultCall && !this.isSupervisorListeningIn()) {
-                        let primaryCall;
-                        let activeCallList = this.getActiveCallsList();
-
-                        // goal is to find the primary call and change its participantType before merging
-                        if (activeCallList.length === 1) {
-                            this.state.activeConferenceCalls = message.data.activeConferenceCalls;
-                            // if we are merging activeCalls into consult user / transfer user, then currently there is no primary call ID
-                            // and the user will have only 1 call. and that is as good as a primary call
-                            primaryCall = activeCallList[0];
-                            this.state.activeConferenceCalls = this.state.activeConferenceCalls.map(
-                                call => {
-                                    if (call.callId === primaryCall.callId) {
-                                        return {...call, contact: call.fromContact}
-                                    }
-                                    return call;
-                                }
-                            )
-                        } else {
-                            // if we are merging consult call into multiparty group user, then they will have a primary call
-                            this.state.activeConferenceCalls.push(message.data.consultCall);
-                            primaryCall = this.getPrimaryCall();
-                        }
-
-                        // update the correct participanttype in the MPC
-                        let elem = this.state.activeConferenceCalls.find(({callId}) => callId === primaryCall.callId);
-                        if (elem) {
-                            elem.callAttributes.participantType = Constants.PARTICIPANT_TYPE.INITIAL_CALLER;
-                            elem.toContact = elem.toContact || this.state.activeCalls[primaryCall.callId].toContact;
-                        }
-                        if (message.data.consultCall.callId === primaryCall.callId) {
-                            message.data.consultCall.callAttributes.participantType = Constants.PARTICIPANT_TYPE.INITIAL_CALLER;
-                        }
-
-                        this.mergeConsultCall(message.data.consultCall, true);
-                        this.updateConferenceUsers(true);
-                    }
-                    break;
-            }
+            this.handleServerEvent(message);
         });
 
         const tenantInfo = {
@@ -884,6 +813,78 @@ export class Sdk {
         } else if (message.data && message.data.type) {
             // bubble event to the event emitter for remote event handling
             this.eventEmitter.emit('event', message);
+        }
+    }
+
+    /**
+     * Handle server-initiated events (from server_event socket channel)
+     */
+    handleServerEvent(message) {
+        switch(message.eventType) {
+            case USER_MESSAGE.MUTE:
+                this.processBroadcastMute(message.data.call, message.data.isMuted);
+                break;
+            case USER_MESSAGE.UNMUTE:
+                this.processBroadcastMute(message.data.call, message.data.isMuted);
+                break;
+            case USER_MESSAGE.HOLD_TOGGLE:
+                this.processHoldToggle(message.data);
+                break;
+            case USER_MESSAGE.CALL_STARTED:
+                this.startTransferOrConsultCall(message);
+                break;
+            case USER_MESSAGE.INTERNAL_CALL_STARTED:
+                this.startInternalCall(message);
+                break;
+            case USER_MESSAGE.PARTICIPANT_CONNECTED:
+                this.connectParticipant(message.data.call.callInfo, message.data.call.callType, message.data.call);
+                break;
+            case USER_MESSAGE.CALL_BARGED_IN:
+                this.publishCallBargedInEventToAgents(message.data);
+                break;
+            case USER_MESSAGE.CALL_DESTROYED:
+                if (!this.isSupervisorListeningIn()) {
+                    this.processCallDestroyed(message.data);
+                }
+                break;
+            case USER_MESSAGE.MERGE:
+                if (!this.hasActiveCalls()) {
+                    return;
+                }
+
+                if (message.fromUsername !== this.state.agentId && message.data.consultCall && !this.isSupervisorListeningIn()) {
+                    let primaryCall;
+                    let activeCallList = this.getActiveCallsList();
+
+                    if (activeCallList.length === 1) {
+                        this.state.activeConferenceCalls = message.data.activeConferenceCalls;
+                        primaryCall = activeCallList[0];
+                        this.state.activeConferenceCalls = this.state.activeConferenceCalls.map(
+                            call => {
+                                if (call.callId === primaryCall.callId) {
+                                    return {...call, contact: call.fromContact}
+                                }
+                                return call;
+                            }
+                        )
+                    } else {
+                        this.state.activeConferenceCalls.push(message.data.consultCall);
+                        primaryCall = this.getPrimaryCall();
+                    }
+
+                    let elem = this.state.activeConferenceCalls.find(({callId}) => callId === primaryCall.callId);
+                    if (elem) {
+                        elem.callAttributes.participantType = Constants.PARTICIPANT_TYPE.INITIAL_CALLER;
+                        elem.toContact = elem.toContact || this.state.activeCalls[primaryCall.callId].toContact;
+                    }
+                    if (message.data.consultCall.callId === primaryCall.callId) {
+                        message.data.consultCall.callAttributes.participantType = Constants.PARTICIPANT_TYPE.INITIAL_CALLER;
+                    }
+
+                    this.mergeConsultCall(message.data.consultCall, true);
+                    this.updateConferenceUsers(true);
+                }
+                break;
         }
     }
 
