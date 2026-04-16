@@ -3016,6 +3016,29 @@ describe('Vendor Sdk tests', () => {
             const body = JSON.parse(requestCallbackFetchArgs.options.body);
             expect(body).toEqual({ callbackNumber: '5551234567', vendorCallKey: 'vkey456', isPreviewCallback: true });
         });
+
+        it('Should NOT include isPreviewCallback in request body when not provided', async () => {
+            const createVoiceCallRes = { voiceCallId: 'vc123', vendorCallKey: 'vkey456' };
+            jest.spyOn(vendorSdk, 'createVoiceCall').mockResolvedValue(createVoiceCallRes);
+
+            let requestCallbackFetchArgs;
+            global.fetch = jest.fn((url, options) => {
+                if (typeof url === 'string' && url.includes('/requestCallback')) {
+                    requestCallbackFetchArgs = { url, options };
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({})
+                    });
+                }
+                return Promise.resolve({ json: () => Promise.resolve(createVoiceCallRes) });
+            });
+
+            await vendorSdk.requestCallback({ phoneNumber: '100', callbackNumber: '5551234567', isUnifiedRouting: true });
+
+            expect(global.fetch).toHaveBeenCalled();
+            const body = JSON.parse(requestCallbackFetchArgs.options.body);
+            expect(body).toEqual({ callbackNumber: '5551234567', vendorCallKey: 'vkey456' });
+        });
     });
 
     describe('Supervisor listen in/Barge In', () => {
