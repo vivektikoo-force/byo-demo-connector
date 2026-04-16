@@ -10,7 +10,7 @@
  * Handles all business logic for call updates, notifications, and state management
  */
 
-import scvConnectorBase from 'scv-connector-base';
+import scvConnectorBase from '@salesforce/scv-connector-base';
 import { USER_MESSAGE } from './server.mjs';
 
 const { Constants } = scvConnectorBase;

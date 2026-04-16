@@ -2920,12 +2920,101 @@ describe('Vendor Sdk tests', () => {
     });
 
     describe('requestCallback', () => {
-        it('Should publish a queued call back event on requestCallback', async () => {
+        beforeEach(() => {
+            publishEvent.mockClear();
+        });
+
+        it('Should publish a queued call back event on requestCallback', () => {
             connector.sdk.requestCallback({ phoneNumber: '100' });
             const argument = publishEvent.mock.calls[0][0];
             expect(argument.eventType).toEqual(Constants.VOICE_EVENT_TYPE.QUEUED_CALL_STARTED);
             expect(argument.payload.call.callType.toLowerCase()).toEqual(Constants.CALL_TYPE.CALLBACK.toLowerCase());
             expect(argument.payload.call.phoneNumber).toEqual('100');
+        });
+
+        it('Should return a promise for non-unified path so callers can chain', async () => {
+            const result = connector.sdk.requestCallback({ phoneNumber: '100' });
+            expect(result).toBeInstanceOf(Promise);
+            await result;
+        });
+
+        it('Should use non-unified path when isUnifiedRouting is false', () => {
+            connector.sdk.requestCallback({ phoneNumber: '200', isUnifiedRouting: false });
+            expect(publishEvent).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: Constants.VOICE_EVENT_TYPE.QUEUED_CALL_STARTED,
+                payload: expect.objectContaining({
+                    call: expect.objectContaining({ phoneNumber: '200' })
+                })
+            }));
+        });
+
+        it('Should use non-unified path when callbackNumber is missing', () => {
+            connector.sdk.requestCallback({ phoneNumber: '300', isUnifiedRouting: true });
+            expect(publishEvent).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: Constants.VOICE_EVENT_TYPE.QUEUED_CALL_STARTED,
+                payload: expect.objectContaining({
+                    call: expect.objectContaining({ phoneNumber: '300' })
+                })
+            }));
+        });
+
+        it('Should create voice call and call requestCallback API when isUnifiedRouting and callbackNumber', async () => {
+            const createVoiceCallRes = { voiceCallId: 'vc123', vendorCallKey: 'vkey456' };
+            jest.spyOn(vendorSdk, 'createVoiceCall').mockResolvedValue(createVoiceCallRes);
+            let requestCallbackFetchArgs;
+            global.fetch = jest.fn((url, options) => {
+                if (typeof url === 'string' && url.includes('/requestCallback')) {
+                    requestCallbackFetchArgs = { url, options };
+                    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+                }
+                return Promise.resolve({ json: () => Promise.resolve(createVoiceCallRes) });
+            });
+            await vendorSdk.requestCallback({ phoneNumber: '100', callbackNumber: '5551234567', isUnifiedRouting: true });
+            expect(vendorSdk.createVoiceCall).toHaveBeenCalledWith(undefined, 'inbound', '5551234567');
+            expect(requestCallbackFetchArgs.url).toContain('/api/voiceCalls/vc123/requestCallback');
+            const body = JSON.parse(requestCallbackFetchArgs.options.body);
+            expect(body).toEqual({ callbackNumber: '5551234567', vendorCallKey: 'vkey456' });
+        });
+
+        it('Should NOT add call to activeCalls when unified routing callback succeeds', async () => {
+            jest.spyOn(vendorSdk, 'createVoiceCall').mockResolvedValue({ voiceCallId: 'vc1', vendorCallKey: 'vk1' });
+            global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+            await vendorSdk.requestCallback({ callbackNumber: '5550000000', isUnifiedRouting: true });
+            expect(Object.keys(vendorSdk.state.activeCalls).length).toBe(0);
+            const queuedCalls = publishEvent.mock.calls.filter(c => c[0].eventType === Constants.VOICE_EVENT_TYPE.QUEUED_CALL_STARTED);
+            expect(queuedCalls.length).toBe(0);
+        });
+
+        it('Should reject when requestCallback API returns non-ok response', async () => {
+            jest.spyOn(vendorSdk, 'createVoiceCall').mockResolvedValue({ voiceCallId: 'vc1', vendorCallKey: 'vk1' });
+            global.fetch = jest.fn(() => Promise.resolve({
+                ok: false, statusText: 'Bad Request',
+                json: () => Promise.resolve({ message: 'callbackNumber invalid' })
+            }));
+            await expect(vendorSdk.requestCallback({ callbackNumber: '5550000000', isUnifiedRouting: true }))
+                .rejects.toBeDefined();
+        });
+
+        it('Should reject when createVoiceCall fails in unified routing callback flow', async () => {
+            jest.spyOn(vendorSdk, 'createVoiceCall').mockRejectedValue(new Error('createVoiceCall failed'));
+            await expect(vendorSdk.requestCallback({ callbackNumber: '5550000000', isUnifiedRouting: true }))
+                .rejects.toThrow('createVoiceCall failed');
+        });
+
+        it('Should include isPreviewCallback in request body when set to true', async () => {
+            const createVoiceCallRes = { voiceCallId: 'vc123', vendorCallKey: 'vkey456' };
+            jest.spyOn(vendorSdk, 'createVoiceCall').mockResolvedValue(createVoiceCallRes);
+            let requestCallbackFetchArgs;
+            global.fetch = jest.fn((url, options) => {
+                if (typeof url === 'string' && url.includes('/requestCallback')) {
+                    requestCallbackFetchArgs = { url, options };
+                    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+                }
+                return Promise.resolve({ json: () => Promise.resolve(createVoiceCallRes) });
+            });
+            await vendorSdk.requestCallback({ phoneNumber: '100', callbackNumber: '5551234567', isUnifiedRouting: true, isPreviewCallback: true });
+            const body = JSON.parse(requestCallbackFetchArgs.options.body);
+            expect(body).toEqual({ callbackNumber: '5551234567', vendorCallKey: 'vkey456', isPreviewCallback: true });
         });
     });
 
@@ -3319,6 +3408,44 @@ describe('Vendor Sdk tests', () => {
             expect(vendorSdk.messageUser).not.toBeCalled();
             expect(vendorSdk.remoteStorage.upsertCall).toHaveBeenCalled();
         });
+
+        it('when useRouteFlowApi is true, should call routeVoiceCall and not executeOmniFlowForUnifiedRouting', async () => {
+            vendorSdk.state.flowConfig.useRouteFlowApi = true;
+            const routeVoiceCallSpy = jest.spyOn(vendorSdk, 'routeVoiceCall').mockResolvedValue({ status: 'Success' });
+            const executeOmniFlowSpy = jest.spyOn(vendorSdk, 'executeOmniFlowForUnifiedRouting').mockResolvedValue({});
+            await vendorSdk.addParticipant(contact, parentCall, true);
+            expect(routeVoiceCallSpy).toHaveBeenCalledTimes(1);
+            expect(routeVoiceCallSpy).toHaveBeenCalledWith('newTransferVendorKey', { routingTarget: 'onlineUser' });
+            expect(executeOmniFlowSpy).not.toHaveBeenCalled();
+        });
+
+        it('when useRouteFlowApi is false, should call executeOmniFlowForUnifiedRouting and not routeVoiceCall', async () => {
+            vendorSdk.state.flowConfig.useRouteFlowApi = false;
+            const routeVoiceCallSpy = jest.spyOn(vendorSdk, 'routeVoiceCall').mockResolvedValue({ status: 'Success' });
+            const executeOmniFlowSpy = jest.spyOn(vendorSdk, 'executeOmniFlowForUnifiedRouting').mockResolvedValue({});
+            await vendorSdk.addParticipant(contact, parentCall, true);
+            expect(executeOmniFlowSpy).toHaveBeenCalledTimes(1);
+            expect(routeVoiceCallSpy).not.toHaveBeenCalled();
+        });
+
+        it('when contact is FLOW and unified routing enabled, should call routeVoiceCall with flow id', async () => {
+            const flowContact = new Contact({ id: 'myFlowId', type: Constants.CONTACT_TYPE.FLOW });
+            const routeVoiceCallSpy = jest.spyOn(vendorSdk, 'routeVoiceCall').mockResolvedValue({ status: 'Success' });
+            const executeUnifiedRoutingTransferSpy = jest.spyOn(vendorSdk, 'executeUnifiedRoutingTransfer').mockResolvedValue();
+            await vendorSdk.addParticipant(flowContact, parentCall, true);
+            expect(routeVoiceCallSpy).toHaveBeenCalledTimes(1);
+            expect(routeVoiceCallSpy).toHaveBeenCalledWith('newVoiceCallId', { routingTarget: 'myFlowId' });
+            expect(executeUnifiedRoutingTransferSpy).not.toHaveBeenCalled();
+        });
+
+        it('when contact is FLOW and unified routing disabled, should call executeOmniFlow', async () => {
+            vendorSdk.state.flowConfig = { isUnifiedRoutingEnabled: false };
+            vendorSdk.state.onlineUsers = ['resolvedAgentId'];
+            const flowContact = new Contact({ id: 'myFlowId', type: Constants.CONTACT_TYPE.FLOW });
+            jest.spyOn(vendorSdk, 'executeOmniFlow').mockResolvedValue({ agent: 'resolvedAgentId' });
+            await vendorSdk.addParticipant(flowContact, parentCall, true);
+            expect(vendorSdk.executeOmniFlow).toHaveBeenCalled();
+        });
     });
     describe('ctrSync', () => {
         let fetchMock;
@@ -3601,6 +3728,39 @@ describe('Vendor Sdk tests', () => {
             };
             vendorSdk.connectParticipant(newCall.callInfo, null, newCall);
             expect(vendorSdk.state.activeCalls['newParticipant1']).toBeDefined();
+        });
+
+        it('routeVoiceCall should call fetch with correct params', async () => {
+            global.fetch = jest.fn(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ status: 'Success' })
+            }));
+            const result = await vendorSdk.routeVoiceCall('vc123', { routingTarget: 'agent1' });
+            expect(result.status).toEqual('Success');
+            expect(global.fetch).toHaveBeenCalledWith(
+                expect.stringContaining('/api/voiceCalls/vc123/route'),
+                expect.objectContaining({ method: 'PATCH' })
+            );
+        });
+
+        it('routeVoiceCall should reject when voiceCallId is missing', async () => {
+            await expect(vendorSdk.routeVoiceCall(null, { routingTarget: 'agent1' }))
+                .rejects.toThrow('voiceCallId is required');
+        });
+
+        it('routeVoiceCall should reject when routingTarget is missing', async () => {
+            await expect(vendorSdk.routeVoiceCall('vc123', {}))
+                .rejects.toThrow('routingTarget is required');
+        });
+
+        it('routeVoiceCall should reject on non-ok response', async () => {
+            global.fetch = jest.fn(() => Promise.resolve({
+                ok: false,
+                statusText: 'Bad Request',
+                json: () => Promise.resolve({ message: 'invalid target' })
+            }));
+            await expect(vendorSdk.routeVoiceCall('vc123', { routingTarget: 'bad' }))
+                .rejects.toThrow('invalid target');
         });
 
         it('updateRemoveTransferCallParticipantVariant should cache variant', () => {

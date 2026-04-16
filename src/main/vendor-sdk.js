@@ -819,7 +819,7 @@ export class Sdk {
     /**
      * Handle server-initiated events (from server_event socket channel)
      */
-    handleServerEvent(message) {
+    async handleServerEvent(message) {
         switch(message.eventType) {
             case USER_MESSAGE.MUTE:
                 this.processBroadcastMute(message.data.call, message.data.isMuted);
@@ -852,12 +852,16 @@ export class Sdk {
                     return;
                 }
 
+                // Don't merge the supervisor if the supervisor is actively listening into a call
                 if (message.fromUsername !== this.state.agentId && message.data.consultCall && !this.isSupervisorListeningIn()) {
                     let primaryCall;
                     let activeCallList = this.getActiveCallsList();
 
+                    // goal is to find the primary call and change its participantType before merging
                     if (activeCallList.length === 1) {
                         this.state.activeConferenceCalls = message.data.activeConferenceCalls;
+                        // if we are merging activeCalls into consult user / transfer user, then currently there is no primary call ID
+                        // and the user will have only 1 call. and that is as good as a primary call
                         primaryCall = activeCallList[0];
                         this.state.activeConferenceCalls = this.state.activeConferenceCalls.map(
                             call => {
@@ -868,10 +872,12 @@ export class Sdk {
                             }
                         )
                     } else {
+                        // if we are merging consult call into multiparty group user, then they will have a primary call
                         this.state.activeConferenceCalls.push(message.data.consultCall);
                         primaryCall = this.getPrimaryCall();
                     }
 
+                    // update the correct participanttype in the MPC
                     let elem = this.state.activeConferenceCalls.find(({callId}) => callId === primaryCall.callId);
                     if (elem) {
                         elem.callAttributes.participantType = Constants.PARTICIPANT_TYPE.INITIAL_CALLER;
@@ -882,7 +888,7 @@ export class Sdk {
                     }
 
                     this.mergeConsultCall(message.data.consultCall, true);
-                    this.updateConferenceUsers(true);
+                    await this.updateConferenceUsers(true);
                 }
                 break;
         }
@@ -1999,7 +2005,6 @@ export class Sdk {
      */
     async addParticipant(contact, call, isBlindTransfer) {
         const parentCall = this.getCall(call);
-        // Default isAutoMergeOn to true for group calls (unless explicitly set to false for warm transfer/consult)
         const isAutoMergeOn = call.callAttributes?.isAutoMergeOn ?? true;
         const callAttributes = {
             ...parentCall.callAttributes,
@@ -2013,9 +2018,8 @@ export class Sdk {
             name: this.state.userFullName
         })
         let isExternalTransfer;
-        let callInfo = {
-            ...(parentCall.callInfo ? new CallInfo(parentCall.callInfo) : {}),
-            renderContactId: contact.id};
+        let callInfo = { ...(parentCall.callInfo ? new CallInfo(parentCall.callInfo) : {}),
+            renderContact: initiatorContact, renderContactId: contact.id};
         if (callInfo.isExternalTransfer !== undefined) {
             isExternalTransfer = callInfo.isExternalTransfer;
         } else if(contact) {
@@ -2027,10 +2031,19 @@ export class Sdk {
         let additionalFields = callInfo.additionalFields ? callInfo.additionalFields : parentCall.callInfo && parentCall.callInfo.additionalFields;
         let transferCall = await this.createVoiceCall(parentCall.callId, Constants.CALL_TYPE.TRANSFER, parentCall.phoneNumber, additionalFields);
         let transferTo = contact.id;
-        if(contact.type === Constants.CONTACT_TYPE.FLOW) {
-            let routingInstruction = await this.executeOmniFlow(transferCall, contact.id);
-            transferTo = routingInstruction.agent || routingInstruction.queue;
+        let unifiedRoutingTransfertoFlow = false;
+
+        if (contact.type === Constants.CONTACT_TYPE.FLOW) {
+            if (this.state?.flowConfig?.isUnifiedRoutingEnabled) {
+                unifiedRoutingTransfertoFlow = true;
+                const routePayload = { routingTarget: transferTo };
+                await this.routeVoiceCall(transferCall.voiceCallId, routePayload);
+            } else {
+                let routingInstruction = await this.executeOmniFlow(transferCall, contact.id);
+                transferTo = routingInstruction.agent || routingInstruction.queue;
+            }
         }
+
         if (!contact.id) {
             contact.id = Math.random().toString(36).substring(5);
         }
@@ -2039,17 +2052,11 @@ export class Sdk {
         let newTransferVendorkey = transferCall.vendorCallKey || this.generateCallId();
 
         /*
-         executeOmniFlow API is required for Unified routing. Adding it here will take care of warm & Blind transfer.
+         Execute Omni Flow or Route Voice Call API is required for Unified routing. Adding it here will take care of warm & Blind transfer.
+         Transfer to flow is already being taken by above block
          */
-        if(this.state?.flowConfig?.isUnifiedRoutingEnabled) {
-            let callInfoData = {
-                transferTo,
-                voiceCallId : newTransferVendorkey
-            };
-            let flowConfigData = {
-                dialedNumber : this.state.flowConfig.dialedNumber
-            };
-            await this.executeOmniFlowForUnifiedRouting(callInfoData,flowConfigData);
+        if (this.state?.flowConfig?.isUnifiedRoutingEnabled && !unifiedRoutingTransfertoFlow) {
+            await this.executeUnifiedRoutingTransfer(newTransferVendorkey, transferTo, this.state.flowConfig);
         }
 
         if (isBlindTransfer) {
@@ -2208,11 +2215,90 @@ export class Sdk {
             return Promise.reject(err);
         });
     }
-/*
 
+    /**
+     * Execute unified routing for transfer: either Route Voice Call API or Execute Omni Flow.
+     * When Use Route Flow API is checked, calls routeVoiceCall; otherwise executeOmniFlowForUnifiedRouting.
+     * @param {string} voiceCallIdOrVendorKey - Voice call ID / vendor call key for the transfer call (newTransferVendorkey)
+     * @param {string} transferTo - Agent ID, Queue ID, or flow result to transfer to
+     * @param {Object} flowConfig - flowConfig from state (dialedNumber, useRouteFlowApi, etc.)
+     * @returns {Promise<void>}
+     */
+    async executeUnifiedRoutingTransfer(voiceCallIdOrVendorKey, transferTo, flowConfig) {
+        if (flowConfig.useRouteFlowApi) {
+            const routePayload = { routingTarget: transferTo };
+            await this.routeVoiceCall(voiceCallIdOrVendorKey, routePayload);
+        } else {
+            const callInfoData = { transferTo, voiceCallId: voiceCallIdOrVendorKey };
+            const flowConfigData = { dialedNumber: flowConfig.dialedNumber };
+            await this.executeOmniFlowForUnifiedRouting(callInfoData, flowConfigData);
+        }
+    }
 
+    /**
+     * Execute unified routing callback: create voice call (inbound), then call requestCallback API.
+     * Does not add the callback to active call list.
+     * @param {string} callbackNumber - Callback number (digits only)
+     * @param {boolean} isPreviewCallback - Optional flag for preview callback (undefined if not set)
+     * @returns {Promise<void>}
+     */
+    executeUnifiedRoutingRequestCallback(callbackNumber, isPreviewCallback) {
+        return this.createVoiceCall(undefined, Constants.CALL_TYPE.INBOUND.toLowerCase(), callbackNumber).then((data) => {
+            const voiceCallId = data.voiceCallId;
+            const vendorCallKey = data.vendorCallKey;
+            const requestBody = { callbackNumber, vendorCallKey };
+            if (typeof isPreviewCallback === 'boolean') {
+                requestBody.isPreviewCallback = isPreviewCallback;
+            }
+            return fetch('/api/voiceCalls/' + voiceCallId + '/requestCallback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            }).then((res) => {
+                if (!res.ok) {
+                    return res.json().then((err) => Promise.reject(err)).catch(() => Promise.reject(new Error(res.statusText)));
+                }
+                return res.json();
+            }).then(() => {
+            });
+        }).catch((err) => {
+            this.log('Unified routing requestCallback failed:', err);
+            return Promise.reject(err);
+        });
+    }
 
-*/
+    /**
+     * Route a voice call to an Agent, Queue, or Flow.
+     * @param {string} voiceCallId - VoiceCall Identifier for which routing needs to be executed
+     * @param {Object} requestBody - Route request
+     * @param {string} requestBody.routingTarget - Agent ID, Queue ID, or Flow ID to route to
+     * @param {string} [requestBody.fallbackQueue] - Fallback queue ID
+     * @param {Object.<string, string>} [requestBody.flowInputParameters] - Input parameters for Flow
+     * @returns {Promise<{status: string}>} RouteVoiceCallResponse with status (success or exception message)
+     */
+    async routeVoiceCall(voiceCallId, requestBody) {
+        if (!voiceCallId) {
+            return Promise.reject(new Error('voiceCallId is required for routeVoiceCall'));
+        }
+        const { routingTarget, fallbackQueue, flowInputParameters } = requestBody || {};
+        if (!routingTarget) {
+            return Promise.reject(new Error('routingTarget is required for routeVoiceCall'));
+        }
+        const body = { routingTarget };
+        if (fallbackQueue != null) body.fallbackQueue = fallbackQueue;
+        if (flowInputParameters != null) body.flowInputParameters = flowInputParameters;
+
+        const response = await fetch('/api/voiceCalls/' + encodeURIComponent(voiceCallId) + '/route', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return Promise.reject(new Error(data.status || data.message || response.statusText));
+        }
+        return data;
+    }
     /**
      * Create a Voice call
      */
@@ -2438,20 +2524,26 @@ export class Sdk {
 
     /**
      * Simulate callback
+     * When Unified Routing is selected with callbackNumber: create voice call, then call requestCallback API
      */
     requestCallback(payload) {
-        const { phoneNumber } = payload;
+        const { phoneNumber, callbackNumber, isUnifiedRouting, isPreviewCallback } = payload || {};
+        if (isUnifiedRouting && callbackNumber) {
+            return this.executeUnifiedRoutingRequestCallback(callbackNumber, isPreviewCallback);
+        }
+        const number = phoneNumber;
         const callInfo = new CallInfo({ callStateTimestamp: new Date() });
         const call = new PhoneCall({ callId: this.generateCallId(),
-            phoneNumber,
+            phoneNumber: number,
             callInfo,
             callType: Constants.CALL_TYPE.CALLBACK.toLowerCase(),
-            contact: new Contact({ phoneNumber }),
+            contact: new Contact({ phoneNumber: number }),
             fromContact: this.getCurrentUserContact(),
-            toContact: new Contact({ phoneNumber }),
+            toContact: new Contact({ phoneNumber: number }),
             callAttributes: { participantType: Constants.PARTICIPANT_TYPE.INITIAL_CALLER } });
         this.addCall(call, true);
         publishEvent({ eventType: Constants.VOICE_EVENT_TYPE.QUEUED_CALL_STARTED, payload: new CallResult({ call })});
+        return Promise.resolve();
     }
 
     /**

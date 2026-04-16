@@ -352,6 +352,55 @@ app.patch('/api/executeOmniFlow', (req, res) => {
     });
 });
 
+app.post('/api/voiceCalls/:voiceCallId/requestCallback', (req, res) => {
+    const voiceCallId = req.params.voiceCallId;
+    const body = req.body || {};
+    const telephonyProviderName = req.get('Telephony-Provider-Name');
+    const params = { voiceCallId, callbackNumber: body.callbackNumber, ...(body.vendorCallKey && { vendorCallKey: body.vendorCallKey }), ...(telephonyProviderName && { telephonyProviderName }), ...(body.isPreviewCallback === true && { isPreviewCallback: true }) };
+    ScrtConnector.requestCallback(params).then(result => {
+        console.log(`Request callback successful : ${JSON.stringify(result.data)}`);
+        res.status(200).json(result.data);
+    }).catch((err) => {
+        console.log(`Failed to request callback : \n ${JSON.stringify(err)}`);
+        res.status(err.response?.status || 500).json(err.response?.data || { message: err.message || 'unsuccessful operation' });
+    });
+});
+
+app.patch('/api/voiceCalls/:voiceCallId/clearRouting', (req, res) => {
+    const voiceCallId = req.params.voiceCallId;
+    const telephonyProviderName = req.get('Telephony-Provider-Name');
+    const params = { voiceCallId, ...(telephonyProviderName && { telephonyProviderName }) };
+    ScrtConnector.clearRouting(params).then(result => {
+        console.log(`Clear routing successful : ${JSON.stringify(result.data)}`);
+        res.status(200).json(result.data || {});
+    }).catch((err) => {
+        console.log(`Failed to clear routing : \n ${JSON.stringify(err)}`);
+        res.status(err.response?.status || 500).json(err.response?.data || { message: err.message || 'unsuccessful operation' });
+    });
+});
+
+app.patch('/api/voiceCalls/:voiceCallId/route', (req, res) => {
+    const voiceCallId = req.params.voiceCallId;
+    const body = req.body || {};
+    const telephonyProviderName = req.get('Telephony-Provider-Name');
+    const params = {
+        voiceCallId,
+        routingTarget: body.routingTarget,
+        ...(body.fallbackQueue != null && { fallbackQueue: body.fallbackQueue }),
+        ...(body.flowInputParameters != null && { flowInputParameters: body.flowInputParameters }),
+        ...(telephonyProviderName && { telephonyProviderName })
+    };
+    ScrtConnector.routeVoiceCall(params).then(result => {
+        console.log(`Route voice call successful : ${JSON.stringify(result.data)}`);
+        res.status(200).json(result.data || {});
+    }).catch((err) => {
+        console.log(`Failed to route voice call : \n ${JSON.stringify(err)}`);
+        const status = err.response?.status || 500;
+        const data = err.response?.data || { message: err.message || 'unsuccessful operation' };
+        res.status(status).json(data);
+    });
+});
+
 app.post('/api/sendVoiceMail', (req, res) => {
     ScrtConnector.sendVoiceMail(req.body).then(result => {
         console.log(`Voice Mail sent successfully`);
