@@ -20,22 +20,19 @@
   min-height: 200px;
 }
 
-.health-check-card {
-  max-width: 600px;
-}
-
 .frequently-used-fields-card {
-  max-width: 600px;
   box-sizing: border-box;
 }
 
-.right-panel {
-  position: sticky;
-  top: 0;
-  max-height: 100vh;
-  overflow-y: scroll;
-  align-self: flex-start;
-  overscroll-behavior-y: contain;
+@media (min-width: 768px) {
+  .right-panel {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: scroll;
+    align-self: flex-start;
+    overscroll-behavior-y: contain;
+  }
 }
 
 .health-check-icon {

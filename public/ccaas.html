@@ -25,8 +25,8 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
 </head>
 
 <body>
-    <div class="slds-grid">
-        <div class="slds-col slds-card slds-size_1-of-2" style="max-width:800px;">
+    <div class="slds-grid slds-wrap">
+        <div class="slds-col slds-card slds-size_1-of-1 slds-medium-size_3-of-5">
 
             <!--------------------------------------------------------------->
             <!----- CCaaS demo app title & commont components - Begin: ------>
@@ -1097,41 +1097,6 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                         </div>
                     </div>
                 </div>
-                <h4 class="slds-card__header-title slds-m-top_medium">CallBack Information</h4>
-                <div>
-                    <div class="slds-form-element">
-                        <label class="slds-form-element__label" for="callbackNumber">
-                            <abbr class="slds-required" title="required">* </abbr>Callback Number:
-                        </label>
-                        <div class="slds-form-element__control">
-                            <input type="text" id="callbackNumber" placeholder="At least one digit required" inputmode="numeric" pattern="[0-9]+" maxlength="20" class="slds-input" title="Callback number (digits only, required when using Callback with Unified Routing)" required>
-                        </div>
-                        <div class="slds-form-element__help slds-form-element__help_text" id="callbackNumberHelp">Required when using Callback with Unified Routing</div>
-                    </div>
-                    <div class="slds-form-element slds-m-top_small">
-                        <div class="slds-form-element__control">
-                            <div class="slds-checkbox">
-                                <input type="checkbox" id="isPreviewCallback" title="Check to set isPreviewCallback to true">
-                                <label class="slds-checkbox__label" for="isPreviewCallback">
-                                    <span class="slds-checkbox_faux"></span>
-                                    <span class="slds-form-element__label">Is Preview Callback</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="slds-form-element__help slds-form-element__help_text">Check when auto dial should not be triggered</div>
-                    </div>
-                </div>
-                <div class="slds-form-element slds-m-top_medium">
-                    <div class="slds-form-element__control">
-                        <div class="slds-checkbox">
-                            <input type="checkbox" id="useRouteFlowApi" name="useRouteFlowApi" title="Use Route Voice Call API for routing">
-                            <label class="slds-checkbox__label" for="useRouteFlowApi">
-                                <span class="slds-checkbox_faux"></span>
-                                <span class="slds-form-element__label">Use Route Flow API</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -1696,29 +1661,6 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
 
                         </div>
                     </article>
-                    <article class="slds-card">
-                        <article class="slds-card">
-                            <div class="slds-card__header slds-grid slds-border_bottom slds-p-bottom_small">
-                                <header class="slds-media slds-media_center slds-has-flexi-truncate">
-                                    <div class="slds-media__figure">
-                                        <span class="slds-icon_container slds-icon-standard-events" title="Event Log">
-                                            <svg class="slds-icon slds-icon_small" aria-hidden="true">
-                                                <use xlink:href="/Assets/symbols.svg#events"></use>
-                                            </svg>
-                                            <span class="slds-assistive-text">Event Log</span>
-                                        </span>
-                                    </div>
-                                    <div class="slds-media__body">
-                                        <h2 class="slds-card__header-title">
-                                            <span>Event Log</span>
-                                        </h2>
-                                    </div>
-                                </header>
-                            </div>
-                            <div class="slds-card__body slds-card__body_inner slds-p-bottom--small">
-                                <textarea id="eventLog" disabled="" placeholder="Response body" class="slds-textarea event-log"></textarea>
-                            </div>
-                        </article>
                         <!-- Settings -->
                         <article class="slds-card">
                             <div class="demo-app-setup-msg-banner" id="demo-app-setup-msg-banner">
@@ -1739,27 +1681,26 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                             </div>
 
                             <div class="slds-p-top_x-large slds-p-left_xx-small slds-p-right_small slds-p-bottom_x-large demo-app-setup-form">
-                                <article class="slds-card">
-                                    <div class="slds-card__header slds-grid slds-p-bottom_small">
-                                        <header class="slds-media slds-media_center slds-has-flexi-truncate">
-                                            <div class="slds-media__figure">
-                                                <span class="slds-icon_container slds-icon-standard-settings" title="Settings">
-                                                    <svg class="slds-icon slds-icon_small" aria-hidden="true">
-                                                        <use xlink:href="/Assets/symbols.svg#settings"></use>
-                                                    </svg>
-                                                    <span class="slds-assistive-text">Settings</span>
-                                                </span>
+                                <ul class="slds-accordion">
+                                    <li class="slds-accordion__list-item">
+                                        <section class="slds-accordion__section slds-is-open">
+                                            <div class="slds-accordion__summary slds-card__header slds-grid slds-p-bottom_small">
+                                                <button class="slds-accordion__summary-action slds-button"
+                                                    aria-expanded="true" title="Toggle Expanded" aria-controls="settingsForm">
+                                                    <span class="slds-icon_container slds-icon-standard-settings slds-m-right_small" title="Settings">
+                                                        <svg class="slds-icon slds-icon_small" aria-hidden="true">
+                                                            <use xlink:href="/Assets/symbols.svg#settings"></use>
+                                                        </svg>
+                                                        <span class="slds-assistive-text">Settings</span>
+                                                    </span>
+                                                    <span class="slds-accordion__summary-heading slds-card__header-title slds-truncate">
+                                                        Settings
+                                                    </span>
+                                                    <img src="/assets/healthCheckIcons/switch.svg" alt="" aria-hidden="true" class="slds-button__icon slds-button__icon_right">
+                                                    <span class="slds-assistive-text slds-accordion__summary-content">Toggle Expanded</span>
+                                                </button>
                                             </div>
-                                            <div class="slds-media__body">
-                                                <h2 class="slds-card__header-title">
-                                                    <span>Settings</span>
-                                                </h2>
-                                            </div>
-                                        </header>
-                                    </div>
-                                </article>
-
-                                <form id="settingsForm"> 
+                                <form id="settingsForm" class="slds-accordion__content"> 
                                     <div class="slds-form slds-p-left_small">
                                       <div class="slds-form-element slds-form-element_stacked">
                                         <label class="slds-form-element__label slds-truncate" for="authorizationContext">ConversationChannelDefinition API Name:</label>
@@ -1856,6 +1797,9 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
 </div>
 </div>
 </form>
+</section>
+</li>
+</ul>
 </div>
 </article>
 
@@ -1909,7 +1853,7 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
     <form id="apiLabForm">
         <div class="slds-form slds-p-left_small">
             <div class="slds-form-element slds-form-element_stacked">
-                <div class="slds-grid slds-wrap slds-p-top_small ">
+                <div class="slds-grid slds-wrap slds-p-vertical_small ">
                     <!-- left panel for input -->
                     <div class="slds-col slds-size_1-of-2 slds-p-right_x-small grid-item">
                         <div class="slds-box-input">
@@ -1922,12 +1866,12 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                                             <option value="POST_MESSAGING_SESSION" selected>POST Messaging Session</option>
                                             <option value="POST_ROUTE">POST Route</option>
                                             <option value="POST_AGENT_WORK">POST AgentWork</option>
-                                            <option value="PATCH_AGENT_WORK">PATCH AgentWork</option>
                                             <option value="POST_ROUTING_RESULT">POST RoutingResult</option>
                                             <option value="DELETE_ROUTE">DELETE Route</option>
                                             <option value="POST_PARTICIPANT">POST Participant</option>
                                             <option value="POST_CONVERSATION">POST Conversation</option>
                                             <option value="POST_CONVERSATION_HISTORY">POST Conversation History</option>
+                                            <option value="PATCH_AGENT_WORK">PATCH AgentWork</option>
                                             <option value="CONSENT">PATCH Consent</option>
                                             <option value="PATCH_REGISTER_CAPABILITIES">PATCH Capabilities</option>
                                         </select>
@@ -1953,7 +1897,7 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                                 <!-- Begin: postAgentWorkAPIContainer -->
                                 <div id="postAgentWorkAPIContainer" class="slds-hide">
                                     <div class="slds-form-element slds-form-element_stacked">
-                                        <label class="slds-form-element__label" for="userId"><abbr class="slds-required" title="required">* </abbr>User Id</label>
+                                        <label class="slds-form-element__label" for="userIdForAgentWork"><abbr class="slds-required" title="required">* </abbr>User Id</label>
                                         <div class="slds-form-element__control slds-grid">
                                             <input type="text" id="userIdForAgentWork" placeholder="Salesforce User Id or External User Id" class="slds-input slds-col slds-size_10-of-12" with-ff-cache-key="userId" />
                                             <button class="slds-col slds-size_2-of-12 slds-button slds-button_icon slds-button_icon-brand auto-fill-button" title="Auto Fill" auto-fill-target-id="userIdForAgentWork">
@@ -2126,10 +2070,10 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                                             <input type="text" id="patchAgentWorkId" placeholder="Salesforce AgentWork Id" class="slds-input slds-col slds-size_10-of-12" with-ff-cache-key="workId" />
                                             <button class="slds-col slds-size_2-of-12 slds-button slds-button_icon slds-button_icon-brand auto-fill-button" title="Auto Fill" auto-fill-target-id="patchAgentWorkId">
                                                 <svg class="slds-button__icon" aria-hidden="true">
-                                                    <use xlink:href="/Assets/magicwand.svg"></use>
+                                                  <use xlink:href="/Assets/magicwand.svg"></use>
                                                 </svg>
                                                 <span class="slds-assistive-text">Auto Fill</span>
-                                            </button>
+                                              </button>
                                         </div>
                                     </div>
                                     <div class="slds-form-element slds-form-element_stacked">
@@ -2308,7 +2252,7 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                                 <!-- End: postRouteResultAPIContainer -->
 
                                 <!-- Begin: patchRegisterCapabilitiesAPIContainer -->
-                                <div id = "patchRegisterCapabilitiesAPIContainer" class="slds-hide">
+                                <div id = "patchRegisterCapabilitiesAPIContainer" class="slds-hide">                                                    
                                     <div class="slds-form-element slds-form-element_stacked">
                                         <abbr class="slds-required" title="required">* </abbr><label class="slds-form-element__label" for="channelCapabilities">Register Capabilities (Upload Payload with a JSON File)</label>
                                         <div class="slds-form-element__control">
@@ -2540,7 +2484,6 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
         </div>
     </form>
 </article>
-</article>
 <!----- Messaging Tab Content - End:  ------>
 <!------------------------------------------>
 
@@ -2553,23 +2496,25 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
 </div>
 
 <!-- right panel for health check and frequently used fields -->
-<div class="right-panel slds-size_1-of-2 slds-col slds-p-horizontal_medium slds-p-vertical_medium">
-    <div class="slds-card health-check-card slds-hide" id="healthCheckTab">
-        <div class="slds-card__header slds-grid">
-            <header class="slds-media slds-media_center slds-has-flexi-truncate">
-                <div class="slds-media__figure">
-                    <span class="slds-icon_container slds-icon-utility-health">
-                        <img src="/Assets/healthCheckIcons/health.svg" alt="Health check icon" />
-                    </span>
-                </div>
-                <div class="slds-media__body">
-                    <h2 class="slds-card__header-title">
-                        <span class="slds-text-heading_small">Setup Health Check</span>
-                    </h2>
-                </div>
-            </header>
-        </div>
-        <div class="slds-card__body slds-card__body_inner">
+<div class="right-panel slds-size_1-of-1 slds-medium-size_2-of-5 slds-col slds-p-horizontal_medium slds-p-vertical_medium">
+    <article class="slds-card health-check-card slds-hide" id="healthCheckTab">
+        <ul class="slds-accordion">
+            <li class="slds-accordion__list-item">
+                <section class="slds-accordion__section">
+                    <div class="slds-accordion__summary slds-card__header slds-grid">
+                        <button class="slds-accordion__summary-action slds-button slds-p-left_none"
+                            aria-expanded="false" title="Toggle Expanded" aria-controls="health-check-content">
+                            <span class="slds-icon_container slds-icon-utility-health" title="Setup Health Check">
+                                <img src="/Assets/healthCheckIcons/health.svg" alt="Health check icon" />
+                            </span>
+                            <span class="slds-accordion__summary-heading slds-card__header-title slds-truncate">
+                                Setup Health Check
+                            </span>
+                            <img src="/assets/healthCheckIcons/switch.svg" alt="" aria-hidden="true" class="slds-button__icon slds-button__icon_right">
+                            <span class="slds-assistive-text slds-accordion__summary-content">Toggle Expanded</span>
+                        </button>
+                    </div>
+                    <div id="health-check-content" class="slds-accordion__content slds-card__body slds-card__body_inner">
             <p class="slds-text-body_small">Simulate a real-time Health Check for BYO Setup.</p>
             <button id="healthCheckButton" class="slds-button slds-button_brand slds-m-top_small slds-button_stretch">
                 Run Health Check
@@ -2595,27 +2540,60 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                     <!-- Accordion sections will be dynamically inserted here -->
                 </div>
             </div>
-        </div>
-    </div>
+            </div>
+            </section>
+            </li>
+        </ul>
+    </article>
+    <article class="slds-card">
+        <ul class="slds-accordion">
+            <li class="slds-accordion__list-item">
+                <section class="slds-accordion__section">
+                    <div class="slds-accordion__summary slds-card__header slds-grid">
+                        <button class="slds-accordion__summary-action slds-button"
+                            aria-expanded="false" title="Toggle Expanded" aria-controls="event-log-content">
+                            <span class="slds-icon_container slds-icon-standard-events slds-m-right_small" title="Event Log">
+                                <svg class="slds-icon slds-icon_small" aria-hidden="true">
+                                    <use xlink:href="/Assets/symbols.svg#events"></use>
+                                </svg>
+                                <span class="slds-assistive-text">Event Log</span>
+                            </span>
+                            <span class="slds-accordion__summary-heading slds-card__header-title slds-truncate">
+                                Event Log
+                            </span>
+                            <img src="/assets/healthCheckIcons/switch.svg" alt="" aria-hidden="true" class="slds-button__icon slds-button__icon_right">
+                            <span class="slds-assistive-text slds-accordion__summary-content">Toggle Expanded</span>
+                        </button>
+                    </div>
+                    <div id="event-log-content" class="slds-accordion__content slds-card__body slds-card__body_inner slds-p-bottom--small">
+                        <textarea id="eventLog" disabled placeholder="Response body" class="slds-textarea event-log"></textarea>
+                    </div>
+                </section>
+            </li>
+        </ul>
+    </article>
     <!-- Frequently Used Fields -->
     <article class="slds-card frequently-used-fields-card slds-p-bottom_x-small" id="frequentlyUsedFieldsCard">
-        <div class="slds-card__header slds-grid">
-            <header class="slds-media slds-media_center slds-has-flexi-truncate">
-                <div class="slds-media__figure">
-                    <span class="slds-icon_container slds-icon-standard-account" title="Frequently Used Fields">
-                        <svg class="slds-icon slds-icon_small" aria-hidden="true">
-                            <use xlink:href="/Assets/symbols.svg#entity"></use>
-                        </svg>
-                    </span>
-                </div>
-                <div class="slds-media__body">
-                    <h2 class="slds-card__header-title slds-truncate">
-                        Frequently Used Fields
-                    </h2>
-                </div>
-            </header>
-        </div>
-        <div class="slds-card__body slds-card__body_inner slds-form">
+        <ul class="slds-accordion">
+            <li class="slds-accordion__list-item">
+                <section class="slds-accordion__section">
+                    <div class="slds-accordion__summary slds-card__header slds-grid">
+                        <button class="slds-accordion__summary-action slds-button"
+                            aria-expanded="false" title="Toggle Expanded" aria-controls="frequently-used-fields-form">
+                            <span class="slds-icon_container slds-icon-standard-account slds-m-right_small" title="Frequently Used Fields">
+                                <svg class="slds-icon slds-icon_small" aria-hidden="true">
+                                    <use xlink:href="/Assets/symbols.svg#entity"></use>
+                                </svg>
+                                <span class="slds-assistive-text">Frequently Used Fields</span>
+                            </span>
+                            <span class="slds-accordion__summary-heading slds-card__header-title slds-truncate">
+                                Frequently Used Fields
+                            </span>
+                            <img src="/assets/healthCheckIcons/switch.svg" alt="" aria-hidden="true" class="slds-button__icon slds-button__icon_right">
+                            <span class="slds-assistive-text slds-accordion__summary-content">Toggle Expanded</span>
+                        </button>
+                    </div>
+                    <div id="frequently-used-fields-form" class="slds-accordion__content slds-card__body slds-card__body_inner slds-form">
             <div class="slds-form-element slds-form-element_stacked">
                 <label class="slds-form-element__label" for="frequent-fields-userId-id">User Id:</label>
                 <div class="slds-form-element__control slds-grid slds-grid_align-space">
@@ -2677,6 +2655,9 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
                 </div>
             </div>
         </div>
+        </section>
+        </li>
+        </ul>
         <!-- <footer class="slds-card__footer"></footer> -->
     </article>
 </div>

@@ -1510,7 +1510,6 @@ document.getElementById('chatList').addEventListener('click', function(event) {
   }
 });
 
-
 function appendInboundMessageToChatList(message, attachmentName, attachmentUrl, payloadField,
     previewImageUrl, inputPayload) {
   if (attachmentName && attachmentUrl) {
@@ -1530,12 +1529,13 @@ function appendInboundMessageToChatList(message, attachmentName, attachmentUrl, 
   const sortedCitations = [...citations].sort((a, b) => getCitationMinOffset(a) - getCitationMinOffset(b));
   const updatedMessage = updateMessageWithInlineCitation(message, sortedCitations, messageId);
   const citationSourcesSectionHTMLText = generateCitationSourcesSectionHTMLText(sortedCitations, messageId);
+  // for aesthetics
   const citationLinkIcon = createSVGElement('/assets/symbols.svg#link', {
     'class': 'citation-link-icon slds-icon slds-icon_small slds-button_icon-brand  slds-m-right_xx-small slds-m-top_xxx-small',
     'aria-hidden': 'true',
   });
   let inboundMessageHTMLElem = generateInboundMessageHTMLElem(updatedMessage, citationSourcesSectionHTMLText);
-  // DOMPurify strips SVGs from innerHTML, so we replace placeholders with cloned SVG nodes
+  // the two clean up functions below are a result of DOM Purify's sanitizing behavior
   inboundMessageHTMLElem.querySelectorAll(".citation-link-icon-placeholder").forEach(element => {
     element.replaceWith(citationLinkIcon.cloneNode(true))
   })
@@ -1570,6 +1570,7 @@ function updateMessageWithInlineCitation(message, sortedCitations, messageId){
   if (sortedCitations?.length <= 0) { return updatedMessage; }
   let citationAnchors = [];
 
+  // for each citation, extract the anchor for the inline citation
   sortedCitations.forEach((citation, citationIdx) => {
     const citedDetails = citation?.citedDetails ?? {};
     if (citedDetails.citedDetailsType === "InlineMetadata") {
@@ -1577,7 +1578,7 @@ function updateMessageWithInlineCitation(message, sortedCitations, messageId){
         const oneBasedIndex = citationIdx + 1;
         citationAnchors.push({
           citedLocationOffset: meta.citedLocationOffset,
-          inlineCitationLabel: `[${oneBasedIndex}]`,
+          inlineCitationLabel: `[${oneBasedIndex}]`, // this is the inline citation displayed in the relevant positions in the message
           inPageTarget: `#citation-source-${messageId}-${oneBasedIndex}`
         })
       })
@@ -1606,6 +1607,7 @@ function generateCitationSourcesSectionHTMLText(sortedCitations, messageId){
   if (sortedCitations?.length <= 0) { return citationSourcesSectionHTMLText; }
   let citationSourcesHTMLTextList = [];
 
+  // for each citation, we want to create a row in the 'Sources' Section
   sortedCitations.forEach((citation, citationIdx) => {
     const citedReference = citation?.citedReference ?? {};
 
