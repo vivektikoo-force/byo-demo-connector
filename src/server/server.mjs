@@ -79,14 +79,12 @@ io.on('connection', socket => {
             onlineUsers.set(data.username, socket.id);
             onlineUsers.set(data.userId, socket.id);
             userFullNames.set(data.username, data.fullName);
-            userFullNames.set(data.userId, data.fullName);
             ScrtConnector.setOnlineUserIds(data.username, data);
         } else {
             console.log('User went offline: ' + data.username);
             onlineUsers.delete(data.username);
             onlineUsers.delete(data.userId);
             userFullNames.delete(data.username);
-            userFullNames.delete(data.userId);
             ScrtConnector.removeOnlineUserIds(data.username);
         }
         socket.broadcast.emit('onlineUsers', {'users' : Array.from(onlineUsers.keys()), 'userNames' : JSON.stringify(Array.from(userFullNames))});
